@@ -1,6 +1,7 @@
 # Script for scraping githubs on a keyword - it allows users to previous query results
 # and then choose whether or not to download repository and raise issue.
 # API: https://docs.github.com/en/rest/search#about-the-search-api
+# Guide: https://stackoverflow.com/questions/67962757/python-how-to-download-repository-zip-file-from-github-using-github-api
 # Chami Lamelas, Eitan Joseph
 
 import requests
@@ -14,7 +15,8 @@ import os
 import base64
 import logging as log
 
-ALLOWED_CONFIGS = {'token', 'issue_title', 'issue_body', 'language', 'output_root', 'raise_issue'}
+ALLOWED_CONFIGS = {'token', 'issue_title', 'issue_body',
+                   'language', 'output_root', 'raise_issue'}
 CONFIRM_PREVIEW_THRESHOLD = 100
 INITIAL_PREVIEW_SIZE = 10
 ITEMS_PER_PAGE = 30
@@ -50,6 +52,7 @@ def get_yes_no_response(prompt):
         user_choice = input(prompt).lower()
     return user_choice in {'y', 'yes'}
 
+
 def make_request(query, token, language, page):
     response = requests.get(
         f"https://api.github.com/search/code?q={urllib.parse.quote(query)}+in:file+language:{urllib.parse.quote(language)}&page={page}",
@@ -59,6 +62,7 @@ def make_request(query, token, language, page):
     )
     json = response.json()
     return json['items']
+
 
 def get_query_results(query, token, language):
     results = list()
@@ -79,9 +83,11 @@ def get_query_results(query, token, language):
     return results
 
 
-def preview_file_content(result):
-    url = f"https://api.github.com/repos/{result['owner']}/{result['repo']}/contents/{result['path']}"
-    response = requests.get(url=url)
+def preview_file_content(result, token):
+    response = requests.get(f"https://api.github.com/repos/{result['owner']}/{result['repo']}/contents/{result['path']}",
+                            headers={
+                                "Authorization": f"Token {token}",
+                            })
     data = response.json()
     assert(data['encoding'] == 'base64')
     file_content = base64.b64decode(data['content']).decode('utf-8')
@@ -99,23 +105,34 @@ def raise_issue(result, token, title, body):
 def download_repository(result, output_root):
     url = f"https://api.github.com/repos/{result['owner']}/{result['repo']}/zipball/"
     response = requests.get(url=url)
+
     TMP_ARCHIVE = 'output.zip'
-    if response.status_code == 200:
-        with open(TMP_ARCHIVE, 'wb') as fh:
-            fh.write(response.content)
-        with zipfile.ZipFile(TMP_ARCHIVE, 'r') as zip_ref:
-            zip_ref.extractall(os.path.join(output_root, f"{result['owner']}_{result['repo']}"))
-        os.remove(TMP_ARCHIVE)
-    else:
+    if response.status_code != 200:
         raise RuntimeError(response.text)
+    with open(TMP_ARCHIVE, 'wb') as fh:
+        fh.write(response.content)
+    try:
+        with zipfile.ZipFile(TMP_ARCHIVE, 'r') as zip_ref:
+            zip_ref.extractall(os.path.join(
+                output_root, f"{result['owner']}_{result['repo']}"))
+    except FileNotFoundError as e:
+        msg = f"Something went wrong extracting the repository, check it manually - {result['repo_url']} (it may be too big).\nException: {str(e)}."
+        print(msg)
+        return msg
+    finally:
+        os.remove(TMP_ARCHIVE)
+    return None
 
 
-def add_to_records(result, dt, filename):
+def add_to_records(result, dt, filename, fail_msg):
     with open(filename, mode='a', encoding='utf-8') as f:
         f.write(f"Owner: {result['owner']}\n")
         f.write(f"Repository: {result['repo_url']}\n")
         f.write(f"Search Result: {result['search_url']}\n")
-        f.write(f"Downloaded: {dt.strftime('%Y/%m/%d %H:%M:%S')}\n")
+        if fail_msg is None:
+            f.write(f"Downloaded: {dt.strftime('%Y/%m/%d %H:%M:%S')} US EST\n")
+        else:
+            f.write(f"Download failed! Message: {fail_msg}")
         f.write('=' * 50 + '\n\n')
 
 
@@ -129,32 +146,37 @@ def enter_query_loop(query, config, dt, filename):
         key = (result["owner"], result["repo"])
         if key in yes_set:
             continue
-        preview_file_content(result)
+        preview_file_content(result, config['token'])
+        print(f"Owner: {result['owner']}\nRepository: {result['repo_url']}")
         if get_yes_no_response(f"({i+1}/{len(results)}) Is match? (y/n) "):
             yes_set.add(key)
             if config['raise_issue']:
                 raise_issue(result, config["token"],
                             config["issue_title"], config["issue_body"])
-            download_repository(result, config['output_root'])
-            add_to_records(result, dt, filename)
+            add_to_records(result, dt, filename, download_repository(
+                result, config['output_root']))
 
 
 def make_empty_file(dt, output_root):
-    filename = os.path.join(output_root, f'records_{dt.strftime("%Y%m%d_%H%M%S")}.txt')
+    filename = os.path.join(
+        output_root, f'records_{dt.strftime("%Y%m%d_%H%M%S")}.txt')
     with open(filename, mode='w+', encoding='utf-8') as f:
         pass
     return filename
+
 
 def make_output_root(output_root):
     if not os.path.isdir(output_root):
         os.mkdir(output_root)
 
+
 def main():
     config = read_config(get_config_filename())
-    print(f"Read config:\n" + '\n'.join(f"{k}={v}" for k, v in config.items()))
+    print(f"Read config:\n" +
+          '\n'.join(f"{k}={v}" for k, v in config.items()) + '\n')
     dt = datetime.now(timezone('US/Eastern'))
-    filename = make_empty_file(dt, config['output_root'])
     make_output_root(config['output_root'])
+    filename = make_empty_file(dt, config['output_root'])
     done = False
     while not done:
         query = input("Query? ")
