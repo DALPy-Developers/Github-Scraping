@@ -14,12 +14,25 @@ import argparse
 import os
 import base64
 import logging as log
+from collections import defaultdict
 
 ALLOWED_CONFIGS = {'token', 'issue_title', 'issue_body',
-                   'language', 'output_root', 'raise_issue'}
+                   'language', 'output_root', 'raise_issue', 'scroll_enabled', 'log_level'}
 CONFIRM_PREVIEW_THRESHOLD = 100
 INITIAL_PREVIEW_SIZE = 10
 ITEMS_PER_PAGE = 30
+LOG = log.getLogger()
+
+class bcolors:
+    OKBLUE = '\033[94m'
+    OKGREEN = '\033[92m'
+    ENDC = '\033[0m'
+
+
+def _cprint(query, to_print, **kwargs):
+    if query in to_print:
+        print(bcolors.OKGREEN + to_print + bcolors.ENDC, **kwargs)
+    else: print(to_print, **kwargs)
 
 
 def get_config_filename():
@@ -31,17 +44,24 @@ def get_config_filename():
 
 
 def read_config(config_fn):
-    config = dict()
+    config = defaultdict(lambda: None)
     with open(config_fn, mode="r", encoding="utf-8") as f:
         for line in f:
             entries = line.strip().split("=")
             assert len(entries) == 2, f'Too many = found in configuration: <{line}>'
             if entries[0] in config:
-                log.warning(f'Duplicate config key {entries[0]} will be ignored.')
+                LOG.warning(f'Duplicate config key {entries[0]} will be ignored.')
                 continue
             assert entries[0] in ALLOWED_CONFIGS, f'Config key {entries[0]} is not a known configuration setting.'
             config[entries[0]] = entries[1]
         config['raise_issue'] = config['raise_issue'] is not None and config['raise_issue'].lower() == 'true'
+        config['scroll_enabled'] = config['scroll_enabled'] is not None and config['scroll_enabled'].lower() == 'true'
+        ch = log.StreamHandler()
+        if 'log_level' in config:
+            ch.setLevel(config['log_level'])
+            LOG.setLevel(config['log_level'])
+        LOG.addHandler(ch)
+        
     return config
 
 
@@ -61,7 +81,12 @@ def make_request(query, token, language, page):
         }
     )
     json = response.json()
-    return json['items']
+    if 'items' in json:
+        return json['items']
+    LOG.error(f'Your token\'s rate limit has likely been exceeded.\n{json}')
+    raise RuntimeError
+
+
 
 
 def get_query_results(query, token, language):
@@ -83,15 +108,29 @@ def get_query_results(query, token, language):
     return results
 
 
-def preview_file_content(result, token):
+def preview_file_content(result, token, scroll_enabled, i, total, query):
     response = requests.get(f"https://api.github.com/repos/{result['owner']}/{result['repo']}/contents/{result['path']}",
                             headers={
                                 "Authorization": f"Token {token}",
-                            })
+                            } if token != None else "")
     data = response.json()
     assert(data['encoding'] == 'base64')
     file_content = base64.b64decode(data['content']).decode('utf-8')
-    print(file_content)
+    if scroll_enabled: print(f"Owner: {result['owner']}\nRepository: {result['repo_url']}")
+    print(f'({i+1}/{total})')
+    for index, line in enumerate(file_content.splitlines()):
+        if index < INITIAL_PREVIEW_SIZE or not scroll_enabled:
+            _cprint(query, line)
+            continue
+        _cprint(query, line, end="")
+        user_response = input()
+        if user_response.lower() in {'y', 'yes'}:
+            return True
+        if user_response.lower() in {'n', 'no'}:
+            return False
+    if not scroll_enabled:
+        print(f"Owner: {result['owner']}\nRepository: {result['repo_url']}")
+    return get_yes_no_response(f"({i+1}/{total}) Is match? (y/n) ")
 
 
 def raise_issue(result, token, title, body):
@@ -99,7 +138,7 @@ def raise_issue(result, token, title, body):
     data = {"title": title, "body": body}
     url = f"https://api.github.com/repos/{result['owner']}/{result['repo']}/issues"
     response = requests.post(url, data=json.dumps(data), headers=headers)
-    print(response)
+    LOG.info(response)
 
 
 def download_repository(result, output_root):
@@ -116,8 +155,8 @@ def download_repository(result, output_root):
             zip_ref.extractall(os.path.join(
                 output_root, f"{result['owner']}_{result['repo']}"))
     except FileNotFoundError as e:
-        msg = f"Something went wrong extracting the repository, check it manually - {result['repo_url']} (it may be too big).\nException: {str(e)}."
-        print(msg)
+        msg = f"Something went wrong extracting the repository, check it manually - {result['repo_url']} (it may be too big).\n{str(e)}"
+        LOG.error(msg)
         return msg
     finally:
         os.remove(TMP_ARCHIVE)
@@ -146,15 +185,14 @@ def enter_query_loop(query, config, dt, filename):
         key = (result["owner"], result["repo"])
         if key in yes_set:
             continue
-        preview_file_content(result, config['token'])
-        print(f"Owner: {result['owner']}\nRepository: {result['repo_url']}")
-        if get_yes_no_response(f"({i+1}/{len(results)}) Is match? (y/n) "):
+        if preview_file_content(result, config['token'], config['scroll_enabled'], i, len(results), query):
             yes_set.add(key)
             if config['raise_issue']:
                 raise_issue(result, config["token"],
                             config["issue_title"], config["issue_body"])
             add_to_records(result, dt, filename, download_repository(
                 result, config['output_root']))
+        print('=' * 50 + '\n\n')
 
 
 def make_empty_file(dt, output_root):
@@ -172,7 +210,7 @@ def make_output_root(output_root):
 
 def main():
     config = read_config(get_config_filename())
-    print(f"Read config:\n" +
+    LOG.info(f"Read config:\n" +
           '\n'.join(f"{k}={v}" for k, v in config.items()) + '\n')
     dt = datetime.now(timezone('US/Eastern'))
     make_output_root(config['output_root'])
