@@ -12,6 +12,7 @@ import zipfile
 import argparse
 import os
 import base64
+import logging as log
 
 ALLOWED_CONFIGS = {'token', 'issue_title', 'issue_body', 'language', 'output_root', 'raise_issue'}
 CONFIRM_PREVIEW_THRESHOLD = 100
@@ -32,12 +33,13 @@ def read_config(config_fn):
     with open(config_fn, mode="r", encoding="utf-8") as f:
         for line in f:
             entries = line.strip().split("=")
-            assert len(
-                entries) == 2 and entries[0] not in config and entries[0] in ALLOWED_CONFIGS
+            assert len(entries) == 2, f'Too many = found in configuration: <{line}>'
+            if entries[0] in config:
+                log.warning(f'Duplicate config key {entries[0]} will be ignored.')
+                continue
+            assert entries[0] in ALLOWED_CONFIGS, f'Config key {entries[0]} is not a known configuration setting.'
             config[entries[0]] = entries[1]
-        assert len(ALLOWED_CONFIGS) == len(config)
-        assert config['raise_issue'].lower() in {'true', 'false'}
-        config['raise_issue'] = config['raise_issue'] == 'true'
+        config['raise_issue'] = config['raise_issue'] is not None and config['raise_issue'].lower() == 'true'
     return config
 
 
