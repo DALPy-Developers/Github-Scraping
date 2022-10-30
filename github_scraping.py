@@ -23,6 +23,7 @@ INITIAL_PREVIEW_SIZE = 10
 ITEMS_PER_PAGE = 30
 LOG = log.getLogger()
 
+
 class bcolors:
     OKBLUE = '\033[94m'
     OKGREEN = '\033[92m'
@@ -32,7 +33,8 @@ class bcolors:
 def _cprint(query, to_print, **kwargs):
     if query in to_print:
         print(bcolors.OKGREEN + to_print + bcolors.ENDC, **kwargs)
-    else: print(to_print, **kwargs)
+    else:
+        print(to_print, **kwargs)
 
 
 def get_config_filename():
@@ -48,20 +50,23 @@ def read_config(config_fn):
     with open(config_fn, mode="r", encoding="utf-8") as f:
         for line in f:
             entries = line.strip().split("=")
-            assert len(entries) == 2, f'Too many = found in configuration: <{line}>'
+            assert len(
+                entries) == 2, f'Too many = found in configuration: <{line}>'
             if entries[0] in config:
-                LOG.warning(f'Duplicate config key {entries[0]} will be ignored.')
+                LOG.warning(
+                    f'Duplicate config key {entries[0]} will be ignored.')
                 continue
             assert entries[0] in ALLOWED_CONFIGS, f'Config key {entries[0]} is not a known configuration setting.'
             config[entries[0]] = entries[1]
-        config['raise_issue'] = config['raise_issue'] is not None and config['raise_issue'].lower() == 'true'
+        config['raise_issue'] = config['raise_issue'] is not None and config['raise_issue'].lower(
+        ) == 'true'
         config['scroll_enabled'] = config['scroll_enabled'] is not None and config['scroll_enabled'].lower() == 'true'
         ch = log.StreamHandler()
         if 'log_level' in config:
             ch.setLevel(config['log_level'])
             LOG.setLevel(config['log_level'])
         LOG.addHandler(ch)
-        
+
     return config
 
 
@@ -85,8 +90,6 @@ def make_request(query, token, language, page):
         return json['items']
     LOG.error(f'Your token\'s rate limit has likely been exceeded.\n{json}')
     raise RuntimeError
-
-
 
 
 def get_query_results(query, token, language):
@@ -116,7 +119,8 @@ def preview_file_content(result, token, scroll_enabled, i, total, query):
     data = response.json()
     assert(data['encoding'] == 'base64')
     file_content = base64.b64decode(data['content']).decode('utf-8')
-    if scroll_enabled: print(f"Owner: {result['owner']}\nRepository: {result['repo_url']}")
+    if scroll_enabled:
+        print(f"Owner: {result['owner']}\nRepository: {result['repo_url']}")
     print(f'({i+1}/{total})')
     for index, line in enumerate(file_content.splitlines()):
         if index < INITIAL_PREVIEW_SIZE or not scroll_enabled:
@@ -211,7 +215,7 @@ def make_output_root(output_root):
 def main():
     config = read_config(get_config_filename())
     LOG.info(f"Read config:\n" +
-          '\n'.join(f"{k}={v}" for k, v in config.items()) + '\n')
+             '\n'.join(f"{k}={v}" for k, v in config.items()) + '\n')
     dt = datetime.now(timezone('US/Eastern'))
     make_output_root(config['output_root'])
     filename = make_empty_file(dt, config['output_root'])
