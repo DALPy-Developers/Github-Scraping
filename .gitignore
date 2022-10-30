@@ -2,6 +2,9 @@
 records_*.txt
 *.config
 collected_repos/
+download_repo.py
+query.py
+*.zip
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
