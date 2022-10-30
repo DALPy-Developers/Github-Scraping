@@ -33,7 +33,7 @@ To run the script with a config file, just run `python github_scraper.py <config
 - token - This token linked to the GitHub account you wish to publish issues from.
 - issue_title - The title of the issue to raise.
 - issue_body - The body of the issue to raise.
-- language - Select a language from a list of available languages to query on provided by github. See [the partial list of available langages.](partial-list-of-languages)
+- language - Select a language from a list of available languages to query on provided by github. See [the partial list of available langages.](#partial-list-of-languages)
 - output_root - The directory to save downloaded repos to.
 - raise_issue - Set to `true` to automatically raise issues on offending repositories.
 - scroll_enabled - Set to `true` to view matched files by scrolling through the file isntead of viewing the entire file at once. Press enter to reveal the next line, and enter `y` or `n` to make a decision on that repositroy.
