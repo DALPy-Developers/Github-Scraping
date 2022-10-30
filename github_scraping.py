@@ -14,10 +14,10 @@ import argparse
 import os
 import base64
 import logging as log
-from collections import defaultdict
+from collections import defaultdict, Counter
 
 ALLOWED_CONFIGS = {'token', 'issue_title', 'issue_body',
-                   'language', 'output_root', 'raise_issue', 'scroll_enabled', 'log_level'}
+                   'language', 'output_root', 'extra_directory', 'raise_issue', 'scroll_enabled', 'log_level'}
 CONFIRM_PREVIEW_THRESHOLD = 100
 INITIAL_PREVIEW_SIZE = 10
 ITEMS_PER_PAGE = 30
@@ -193,6 +193,7 @@ def enter_query_loop(query, config, dt, filename):
             add_to_records(result, dt, filename, download_repository(
                 result, config['output_root']))
         print('=' * 50 + '\n\n')
+    return yes_set
 
 
 def make_empty_file(dt, output_root):
@@ -216,10 +217,18 @@ def main():
     make_output_root(config['output_root'])
     filename = make_empty_file(dt, config['output_root'])
     done = False
+    yes_set = set()
     while not done:
         query = input("Query? ")
-        enter_query_loop(query, config, dt, filename)
+        yes_set.update(enter_query_loop(query, config, dt, filename))
         done = not get_yes_no_response("Continue querying? (y/n) ")
+    users = Counter()
+    if config['extra_directory'] is not None:
+        make_output_root(config['extra_directory'])
+        for elem in yes_set:
+            owner = elem[0]
+            users[owner] += 1
+            make_output_root(os.path.join(config['extra_directory'], f"{owner}{('_'+str(users[owner])) if users[owner] > 1 else ''}"))
 
 
 if __name__ == '__main__':
