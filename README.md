@@ -31,17 +31,17 @@ The token is required for using the [Github API](https://docs.github.com/en/rest
 To run the script with a config file, just run `python github_scraper.py <config filename>` then follow the provided prompts. 
 
 ## Configuration Details
-- *token* - This token linked to the GitHub account you wish to publish issues from.
+- **token** - This token linked to the GitHub account you wish to publish issues from.
 - issue_title - The title of the issue to raise.
 - issue_body - The body of the issue to raise.
-- *language* - Select a language from a list of available languages to query on provided by github. See [the partial list of available langages.](#partial-list-of-languages)
-- *output_root* - The directory to save downloaded repos to.
+- **language** - Select a language from a list of available languages to query on provided by github. See [the partial list of available langages.](#partial-list-of-languages)
+- **output_root** - The directory to save downloaded repos to.
 - raise_issue - Set to `true` to automatically raise issues on offending repositories.
 - scroll_enabled - Set to `true` to view matched files by scrolling through the file isntead of viewing the entire file at once. Press enter to reveal the next line, and enter `y` or `n` to make a decision on that repositroy.
 - extra_directory - Set a path here to create a directory containing empty folders labeled by the usernames of the repository owners. This is useful for running MOSS. You can optionally ommit this configuration option.
 - log_level - Choose a log level from the set of [Python log levels](https://docs.python.org/3/library/logging.html#logging-levels). Omitting this configuration detail defaults the level to INFO.
 
-Required configuration fields are bolded.
+Note: configuration fields in **bold text** are required.
 
 ## Partial List of Languages
 See [GitHub search](https://github.com/search/advanced?q=Sample&type=Repositories) for a full list of available languages.
