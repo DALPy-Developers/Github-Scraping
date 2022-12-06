@@ -15,6 +15,7 @@ import os
 import base64
 import logging as log
 from collections import defaultdict, Counter
+import time
 
 ALLOWED_CONFIGS = {'token', 'issue_title', 'issue_body',
                    'language', 'output_root', 'extra_directory', 'raise_issue', 'scroll_enabled', 'log_level'}
@@ -22,6 +23,8 @@ CONFIRM_PREVIEW_THRESHOLD = 100
 INITIAL_PREVIEW_SIZE = 10
 ITEMS_PER_PAGE = 30
 LOG = log.getLogger()
+
+num_requests = 0
 
 
 class bcolors:
@@ -78,17 +81,20 @@ def get_yes_no_response(prompt):
 
 
 def make_request(query, token, language, page):
+    global num_requests
+    time.sleep(30)
     response = requests.get(
         f"https://api.github.com/search/code?q={urllib.parse.quote(query)}+in:file+language:{urllib.parse.quote(language)}&page={page}",
         headers={
             "Authorization": f"Token {token}",
         }
     )
+    num_requests += 1
     json = response.json()
     if 'items' in json:
         return json['items']
     LOG.error(f'Your token\'s rate limit has likely been exceeded.\n{json}')
-    raise RuntimeError
+    raise RuntimeError(f'num_requests={num_requests}')
 
 
 def get_query_results(query, token, language):
@@ -226,6 +232,7 @@ def main():
         query = input("Query? ")
         yes_set.update(enter_query_loop(query, config, dt, filename))
         done = not get_yes_no_response("Continue querying? (y/n) ")
+    # ideally could this be done after responding y/n to every query? 
     users = Counter()
     if config['extra_directory'] is not None:
         make_output_root(config['extra_directory'])
