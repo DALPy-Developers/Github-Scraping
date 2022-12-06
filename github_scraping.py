@@ -66,7 +66,6 @@ def read_config(config_fn):
             ch.setLevel(config['log_level'])
             LOG.setLevel(config['log_level'])
         LOG.addHandler(ch)
-
     return config
 
 
@@ -143,6 +142,7 @@ def raise_issue(result, token, title, body):
     url = f"https://api.github.com/repos/{result['owner']}/{result['repo']}/issues"
     response = requests.post(url, data=json.dumps(data), headers=headers)
     LOG.info(response)
+    print("Raised Issue!")
 
 
 def download_repository(result, output_root):
@@ -182,9 +182,9 @@ def add_to_records(result, dt, filename, fail_msg):
 def enter_query_loop(query, config, dt, filename):
     results = get_query_results(
         query, config['token'], config['language'].lower())
-    if len(results) >= CONFIRM_PREVIEW_THRESHOLD and not get_yes_no_response(f"Query {query} returned {len(results)} results, are you sure you want to preview them?\nYou may want to make a more specific query.\n(y/n) "):
-        return
     yes_set = set()
+    if len(results) >= CONFIRM_PREVIEW_THRESHOLD and not get_yes_no_response(f"Query {query} returned {len(results)} results, are you sure you want to preview them?\nYou may want to make a more specific query.\n(y/n) "):
+        return yes_set
     for i, result in enumerate(results):
         key = (result["owner"], result["repo"])
         if key in yes_set:
@@ -232,7 +232,8 @@ def main():
         for elem in yes_set:
             owner = elem[0]
             users[owner] += 1
-            make_output_root(os.path.join(config['extra_directory'], f"{owner}{('_'+str(users[owner])) if users[owner] > 1 else ''}"))
+            make_output_root(os.path.join(
+                config['extra_directory'], f"{owner}{('_'+str(users[owner])) if users[owner] > 1 else ''}"))
 
 
 if __name__ == '__main__':
