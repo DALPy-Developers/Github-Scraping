@@ -1,8 +1,20 @@
-# Script for scraping githubs on a keyword - it allows users to previous query results
-# and then choose whether or not to download repository and raise issue.
-# API: https://docs.github.com/en/rest/search#about-the-search-api
-# Guide: https://stackoverflow.com/questions/67962757/python-how-to-download-repository-zip-file-from-github-using-github-api
-# Chami Lamelas, Eitan Joseph
+#!/usr/bin/python3
+
+"""
+Script for scraping githubs on a keyword - it allows users to previous query results and then choose whether or not to download repository and raise issue.
+
+API: https://docs.github.com/en/rest/search#about-the-search-api
+Guide: https://stackoverflow.com/questions/67962757/python-how-to-download-repository-zip-file-from-github-using-github-api
+
+Version: 1.14.2023
+
+See https://github.com/DALPy-Developers/Github-Scraping for the most up to date version.
+
+Authors: Chami Lamelas (slamel01), Eitan Joseph
+Date: Fall 2022
+
+TODO: Needs documentation
+"""
 
 import requests
 import json
@@ -44,7 +56,7 @@ def get_config_filename():
     parser = argparse.ArgumentParser()
     parser.add_argument('config', type=str, help='config file')
     args = parser.parse_args()
-    assert(os.path.isfile(args.config))
+    assert (os.path.isfile(args.config))
     return args.config
 
 
@@ -122,7 +134,7 @@ def preview_file_content(result, token, scroll_enabled, i, total, query):
                                 "Authorization": f"Token {token}",
                             } if token != None else "")
     data = response.json()
-    assert(data['encoding'] == 'base64')
+    assert (data['encoding'] == 'base64')
     file_content = base64.b64decode(data['content']).decode('utf-8')
     if scroll_enabled:
         print(f"Owner: {result['owner']}\nRepository: {result['repo_url']}")
@@ -232,7 +244,7 @@ def main():
         query = input("Query? ")
         yes_set.update(enter_query_loop(query, config, dt, filename))
         done = not get_yes_no_response("Continue querying? (y/n) ")
-    # ideally could this be done after responding y/n to every query? 
+    # ideally could this be done after responding y/n to every query?
     users = Counter()
     if config['extra_directory'] is not None:
         make_output_root(config['extra_directory'])

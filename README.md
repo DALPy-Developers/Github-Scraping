@@ -61,3 +61,9 @@ See [GitHub search](https://github.com/search/advanced?q=Sample&type=Repositorie
 
 * [Chami Lamelas](https://github.com/ChamiLamelas)
 * [Eitan Joseph](https://github.com/EitanJoseph)
+
+## Changelog
+
+### 1.14.2023
+
+Used in Tufts COMP 15 in fall 2022. Planned for use in future semesters. First version moved to course repo.
