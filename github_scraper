@@ -1,0 +1,574 @@
+#!/usr/bin/env python3
+
+"""
+Script for scraping GitHubs based on a keyword.
+
+This script must have 750 permissions to run on Linux.
+
+Version: 3.3.2023
+
+See https://github.com/DALPy-Developers/Github-Scraping for the most up to date version.
+
+Authors: Chami Lamelas (slamel01), Eitan Joseph
+Date: Fall 2022 - Spring 2023
+"""
+
+from enum import Enum
+import zipfile
+import base64
+import time
+import sys
+import logging
+import json
+import requests
+from pytz import timezone
+from datetime import datetime
+import urllib.parse
+import csv
+import os
+import argparse
+from pathlib import Path
+
+# toml module (from PyPI) is used in place of tomllib (Python standard library) as tomllib
+# will only be available in Python 3.11.x and Tufts server runs Python 3.9.2.
+import toml
+
+# Script descriptions ...
+DESCRIPTION = "This script is used for scraping GitHub repositories based on a provided query."
+EPILOG = "Please visit https://github.com/DALPy-Developers/Github-Scraping/blob/main/README.md to learn how to use this script."
+
+# TOML required settings ...
+TOKEN = 'token'
+ROOT = 'collection_root'
+
+# TOML optional settings ...
+RAISE_ISSUE = 'raise_issue'
+ISSUE_TITLE = 'issue_title'
+ISSUE_BODY = 'issue_body'
+ISSUE_CONTACT = 'issue_contact_email'
+LANGUAGE = 'language'
+EXTRA_DIRECTORY = 'extra_directory'
+API_TIMEOUT = 'api_timeout'
+
+# TOML defaults for non-required TOML options ...
+DEFAULTS = {
+    RAISE_ISSUE: False,
+    ISSUE_TITLE: "TUFTS COMP15 IMPORTANT",
+    ISSUE_BODY: "We noticed you have publicly posted the solution to an assignment in Tufts University course CS15. Please either delete this repository or make it private ASAP. In the past, we've had issues with students plagiarizing code they find on GitHub.",
+    ISSUE_CONTACT: "No additional contact information was provided.",
+    LANGUAGE: "c++",
+    EXTRA_DIRECTORY: None,
+    API_TIMEOUT: 5
+}
+
+# Basenames of various files that will be placed in ROOT
+RECORDS_BASENAME = "records.txt"
+QUERIES_BASENAME = "queries.txt"
+LOG_BASENAME = ".github_scraper.log"
+TMP_ARCHIVE_BASENAME = ".github_scraper.zip"
+
+# Formatting for records file
+RECORDS_HEADER = ["owner", "repository",
+                  "repository_url", "download_timestamp"]
+
+# UI related constants
+QUIT_QUERYING = "@q"
+YES_RESPONSE = 'y'
+NO_RESPONSE = 'n'
+QUIT_QUERY = 'q'
+INITIAL_PREVIEW_ROWS = int(os.get_terminal_size()[1]/2)
+"""I chose half the terminal size because I thought it looked better"""
+
+# GitHub API settings
+ISSUE_CREATED = 201
+ISSUES_DISABLED = 410
+ITEMS_PER_PAGE = 30
+GET_OK = 200
+
+
+def get_config_filename():
+    """Gets the configuration filename from the command line (a required argument) and sets up help info. """
+
+    parser = argparse.ArgumentParser(description=DESCRIPTION, epilog=EPILOG)
+    parser.add_argument('config', type=str, help='config file')
+    args = parser.parse_args()
+    assert os.path.isfile(
+        args.config), f"Configuration file {args.config} does not exist!"
+    return args.config
+
+
+def check_and_make(dir_path):
+    """If dir_path is not a directory, make it"""
+
+    if not os.path.isdir(dir_path):
+        os.mkdir(dir_path)
+
+
+def get_first_line(path):
+    """Gets 1st line of a text file (with no newline)"""
+
+    with open(path, 'r', encoding='utf-8') as f:
+        return next(iter(f)).rstrip('\n')
+
+
+def get_subdir_basenames(dir):
+    """Get set of basenames of subdirectories of a directory"""
+
+    return {e.name for e in os.scandir(dir) if e.is_dir()}
+
+
+def make_urlstr(s):
+    """Turns a string into a proper component of a URL - needed for github api"""
+
+    return urllib.parse.quote(s)
+
+
+def preview_line(line, query, index):
+    """Previews a line in green if query is in it, else terminal default"""
+
+    print(('\033[92m' + line + '\033[0m') if query in line else line,
+          end=("" if index >= INITIAL_PREVIEW_ROWS else "\n"))
+
+
+def read(prompt=""):
+    """Reads from user input with a prompt, strips, and lowers it"""
+
+    return input(prompt).strip().lower()
+
+
+def wait_for_yn(prompt):
+    """Waits for a valid y/n response and then returns it"""
+
+    done = False
+    while not done:
+        user_input = read(prompt + f" ({YES_RESPONSE}/{NO_RESPONSE}) ")
+        done = (user_input == YES_RESPONSE) or (user_input == NO_RESPONSE)
+    return user_input
+
+
+def add_line(path, line):
+    """Adds a line to the end of a text file"""
+
+    with open(path, 'a', encoding='utf-8') as f:
+        f.write(line + '\n')
+
+
+def make_nice_time(sec):
+    """Converts a time in seconds into a nicer str time that will include minutes if secs is too big"""
+
+    mins, sec = divmod(sec, 60)
+    return f"{mins}m {sec}s" if mins > 0 else (str(sec) + "s")
+
+
+class GithubScraper:
+    """This is the main class of this file: initializing a GitHub scraper runs the program."""
+
+    class PreviewResult(Enum):
+        """Represents the 3 states of a user's preview of a file"""
+
+        ACCEPTED = 1
+        REJECTED = 2
+        CANCELLED_QUERY = 3
+
+    class APIResult:
+        """Represents a result from searching the API."""
+
+        def __init__(self, owner, repo, path, repo_url):
+            """Initializes an APIResult from with repository owner, name, search result path, and repo URL"""
+
+            self.owner = owner
+            self.repo = repo
+            self.path = path
+            self.repo_url = repo_url
+
+        def __eq__(self, other):
+            """Determines if two results are equal - necessary to make a set of APIResults"""
+
+            return self.owner == other.owner and self.repo == other.repo
+
+        def __hash__(self):
+            """Provides hash code for a result - necessary to make a set of APIResults"""
+
+            return hash(self.owner + self.repo)
+
+        def get_dirbasename(self):
+            """Gets a directory basename that, within the parent directory, is a valid (database) key for a record"""
+
+            return self.owner + "_" + self.repo
+
+        def __str__(self):
+            """String representation of result - used in logging"""
+
+            return f"APIResult(owner={self.owner},repo={self.repo},path={self.path},repo_url={self.repo_url})"
+
+    def __init__(self, config_filename):
+        """Initializes and runs the scraper given a configuration filename."""
+
+        # No logging is done over these 2 functions - program just crashes from raised exceptions
+        self.__loadup_config(config_filename)
+        self.__setup_logger()
+
+        try:
+            self.__init_records()
+            self.__load_previous_queries()
+
+            # Runs query prompting input loop
+            done = False
+            while not done:
+                query = input(f"Query (or {QUIT_QUERYING} to quit)? ")
+                if query == QUIT_QUERYING:
+                    done = True
+                else:
+                    self.__process(query)
+        except AssertionError as e:
+            # Any errors raised by functions called above will cause program to abort
+            # but by logging here, we can display the stack trace in the log for future diagnosis
+            self.logger.exception(str(e))
+            self.__point_out_log()
+
+    def __process(self, query):
+        """
+        Processes a query - collects query results to preview, previews each one, downloads ones user selects
+        and updates the saved records, raising issues and creating extra dirs if appropriate
+        """
+
+        # here we maintain that self.queries reflects the contents of the queries file (assuming
+        # the file is not edited independent of this program)
+        if query not in self.queries:
+            add_line(self.queries_path, query)
+            self.queries.add(query)
+        records_to_preview = self.__collect_results_to_preview(query)
+        for i, record in enumerate(records_to_preview):
+
+            # This check is necessary as self.records is updated by __add_record() so
+            # we don't want to have user preview files from the same repository from
+            # the search results. This is to account for the fact that within the same
+            # page there could be multiple records from the same repository
+            if record not in self.records:
+                self.logger.info(
+                    f"Previewing file {i + 1}/{len(records_to_preview)}:\n")
+                preview_result = self.__preview_record(record, query)
+                if preview_result == GithubScraper.PreviewResult.CANCELLED_QUERY:
+                    return
+                elif preview_result == GithubScraper.PreviewResult.ACCEPTED:
+                    self.__download_record(record)
+                    self.__add_record(record)
+                    self.__raise_issue(record)
+                    self.__make_extra_dir(record)
+            else:
+                self.logger.debug(
+                    f"Skipping record (already downloaded repo): {record}")
+
+    # Helper functions for __process() ...
+
+    def __collect_results_to_preview(self, query):
+        """Collects query results to be previewed, checking saved records"""
+
+        self.logger.info(
+            f"Beginning to collect records to preview, this may take awhile...")
+        records = list()
+        page = 1
+        done = False
+
+        # Go page by page and make api request and collect into
+        while not done:
+            json_results = self.__search(query, page)
+            for result in json_results:
+                record = GithubScraper.APIResult(
+                    result['repository']['owner']['login'],
+                    result['repository']['name'],
+                    result['path'],
+                    result['repository']['html_url']
+                )
+
+                # This is the first check to make sure that results from a page are not
+                # previewed to the user. This does not handle records from the same
+                # repository within the same page when the repository is first discovered.
+                # This does handle when repository has already been recorded from previous
+                # pages or previous scrapes.
+                if record not in self.records:
+                    records.append(record)
+
+            # last page will have less < ITEMS_PER_PAGE
+            done = len(json_results) < ITEMS_PER_PAGE
+            page += 1
+        return records
+
+    def __preview_record(self, record, query):
+        """
+        Previews a record, return GithubScraper.PreviewResult indicating user decision
+
+        Relevant API: https://docs.github.com/en/rest/repos/contents?apiVersion=2022-11-28
+        """
+
+        resp_json = self.__get_json(
+            f"https://api.github.com/repos/{record.owner}/{record.repo}/contents/{record.path}")
+
+        # Github gives you the content as a base64 file, so we try to decode and then read line by line
+        assert resp_json["encoding"] == "base64", "Unable to preview the contents of search result."
+        file_content = base64.b64decode(resp_json['content']).decode('utf-8')
+        self.logger.info(f"Owner: {record.owner} Repository: {record.repo}\n")
+        for index, line in enumerate(file_content.splitlines()):
+            preview_line(line, query, index)
+
+            # Once we show the first few rows of the file, we start asking user to move forward line
+            # by line with enter (like unix less) or respond y/n/q
+            if index >= INITIAL_PREVIEW_ROWS:
+                download = read()
+                if download == QUIT_QUERY:
+                    self.logger.info(
+                        f"User cancelled previewing for query {query}")
+                    return GithubScraper.PreviewResult.CANCELLED_QUERY
+                if download == YES_RESPONSE or download == NO_RESPONSE:
+                    return self.__process_match_decision(record, download)
+
+        # If we reach file end (out of the above loop) we force the user to respond y/n
+        return self.__process_match_decision(record, wait_for_yn("Accept download?"))
+
+    def __download_record(self, record):
+        """
+        Downloads a record
+
+        Relevant guide: https://stackoverflow.com/questions/67962757/python-how-to-download-repository-zip-file-from-github-using-github-api
+        """
+
+        self.logger.info(
+            f"Commencing download into {record.get_dirbasename()}\n")
+        url = f"https://api.github.com/repos/{record.owner}/{record.repo}/zipball/"
+
+        # For downloading a repo, we get it as a zip and then extract it
+        response = self.__get(url)
+        archive = os.path.join(self.config[ROOT], TMP_ARCHIVE_BASENAME)
+        with open(archive, 'wb') as f:
+            f.write(response.content)
+        try:
+            with zipfile.ZipFile(archive, 'r') as zip_ref:
+                zip_ref.extractall(os.path.join(
+                    self.config[ROOT], record.get_dirbasename()))
+            self.logger.debug(
+                f"Completed download into {record.get_dirbasename()}")
+        except FileNotFoundError as e:
+            raise RuntimeError(
+                f"Something went wrong extracting the repository, check it manually - {record.repo_url} (it may be too big).\n{str(e)}")
+        finally:
+            # Remove temporary archive if extraction failed
+            os.remove(archive)
+
+    def __make_extra_dir(self, record):
+        """Makes an extra directory corresponding to record"""
+
+        if self.config[EXTRA_DIRECTORY] is not None:
+            Path(os.path.join(self.config[EXTRA_DIRECTORY], record.get_dirbasename())).mkdir(
+                parents=True, exist_ok=True)
+
+    def __add_record(self, record):
+        """Adds a record to the records file"""
+
+        # adds a record to maintained set and records file (inc. timestamp)
+        self.records.add(record)
+        timestamp = datetime.now(
+            timezone('US/Eastern')).strftime('%Y/%m/%d %H:%M:%S')
+        add_line(self.records_path, ','.join(
+            (record.owner, record.repo, record.repo_url, timestamp)))
+
+    def __raise_issue(self, record):
+        """
+        Raises an issue on a particular record
+
+        Relevant API: https://docs.github.com/en/rest/issues/issues?apiVersion=2022-11-28#create-an-issue
+        """
+
+        if not self.config[RAISE_ISSUE]:
+            return
+        headers = {"Authorization": f'Token {self.config[TOKEN]}'}
+        data = {"title": self.config[ISSUE_TITLE],
+                "body": self.config[ISSUE_BODY] + "\n\n" + self.config[ISSUE_CONTACT]}
+        url = f"https://api.github.com/repos/{record.owner}/{record.repo}/issues"
+        self.logger.debug(
+            f"Making authorized POST request to {url} with data:\n{data}")
+        response = requests.post(url, data=json.dumps(data), headers=headers)
+        if response.status_code == ISSUE_CREATED:
+            self.logger.info(
+                f"Issue raised successfully on the repository {record.repo} belonging to {record.owner}.")
+        elif response.status_code == ISSUES_DISABLED:
+            self.__warn(
+                f"{record.owner} has disabled issues on the repository {record.repo}.")
+        else:
+            self.__warn(
+                f"Something went wrong creating a record on the repository {record.repo} belonging to {record.owner}. Response code: {response.status_code}")
+
+    # Wrappers over GET requests ...
+
+    def __get(self, url):
+        """
+        Hits URL with GET request and returns Response, GET failing causes program exit
+
+        Note all GitHub API GET requests are done with the provided token for authorization
+        in the hope that this will allow for nicer rate limits. However, it is only technically
+        necessary for the code search API (for the same reason why you have to be logged in to
+        search code).
+        """
+
+        headers = {"Authorization": f"Token {self.config[TOKEN]}"}
+        self.logger.debug("Sending authorized GET request to: " + url)
+        response = requests.get(url, headers=headers)
+        if response.status_code != GET_OK:
+            # For failed requests, log the entire response to see if user can diagnose
+            self.logger.error("GET request failed, response: " + response.text)
+            sys.exit(1)
+        return response
+
+    def __get_json(self, url):
+        """Gets JSON response from a GET at provided URL"""
+
+        response = self.__get(url)
+        resp_json = response.json()
+        self.logger.debug(
+            f"{len(str(resp_json))} character JSON response, top level keys = {resp_json.keys()}")
+        return resp_json
+
+    # Set up __init__ helper functions (before scraping begins) ...
+
+    def __setup_logger(self):
+        """Sets up logger - basically copy pasted from the Python logging cookbook"""
+
+        self.logger = logging.getLogger('github_scraping')
+        self.logger.setLevel(logging.DEBUG)
+        fh = logging.FileHandler(os.path.join(self.config[ROOT], LOG_BASENAME))
+        fh.setLevel(logging.DEBUG)
+        ch = logging.StreamHandler()
+        ch.setLevel(logging.INFO)
+        file_formatter = logging.Formatter(
+            '%(asctime)s | [%(levelname)s] : %(message)s')
+        fh.setFormatter(file_formatter)
+        console_formatter = logging.Formatter('[%(levelname)s] : %(message)s')
+        ch.setFormatter(console_formatter)
+        self.logger.addHandler(fh)
+        self.logger.addHandler(ch)
+
+    def __loadup_config(self, config_filename):
+        """
+        Loads up configuration file, setting defaults where necessary, and making sure all required
+        configuration options are set
+        """
+
+        self.config = toml.loads(Path(config_filename).read_text())
+        required = [TOKEN, ROOT]
+        for r in required:
+            assert r in self.config, f"Missing required configuration option: {r}"
+
+        # Substitute in defaults from optional settings if they aren't specified
+        for k, v in DEFAULTS.items():
+            if k not in self.config:
+                self.config[k] = v
+        check_and_make(self.config[ROOT])
+
+    def __init_records(self):
+        """
+        If the ROOT folder has no directories or records file, one is created. 
+        If the root has folders it must have a valid records file
+        """
+
+        subdirs = get_subdir_basenames(self.config[ROOT])
+        self.records_path = os.path.join(
+            self.config[ROOT], RECORDS_BASENAME)
+        if os.path.isfile(self.records_path):
+            # Validate records in records file match the directories in ROOT
+            with open(self.records_path, 'r', encoding='utf-8') as f:
+                reader = csv.reader(f)
+                header = next(reader)
+                assert header == RECORDS_HEADER, f"{self.records_path} header does not match required header {','.join(RECORDS_HEADER)}."
+                # Load up records from lines
+                self.records = {GithubScraper.APIResult(
+                    *row) for row in reader}
+
+            # Do a set equals to make sure directories match with list of records in file
+            assert {record.get_dirbasename(
+            ) for record in self.records} == subdirs, f"Directories in {self.config[ROOT]} should match the records in {self.records_path}."
+        else:
+            # If no records file exists, make one after making sure there are no directories
+            self.records = set()
+            assert len(
+                subdirs) == 0, f"Records file {self.records_path} does not exist, but directories do in {self.config[ROOT]}."
+            Path(self.records_path).write_text(','.join(RECORDS_HEADER) + "\n")
+
+    def __load_previous_queries(self):
+        """Prints previous queries if a queries file exists in ROOT"""
+
+        self.queries_path = os.path.join(self.config[ROOT], QUERIES_BASENAME)
+        if os.path.isfile(self.queries_path):
+            # Load up set of queries as lines of queries file and print if any exist
+            with open(self.queries_path, 'r', encoding='utf-8') as f:
+                self.queries = set(line.rstrip('\n') for line in f)
+            if len(self.queries) == 0:
+                self.logger.info(
+                    f"No previous queries identified in {self.queries_path}")
+            else:
+                query_str = '\n'.join(('\t' + query) for query in self.queries)
+                self.logger.info(
+                    f"Previous queries identified in {self.queries_path}:\n{query_str}\n")
+        else:
+            self.queries = set()
+
+    # Helper functions for __collect_results_to_preview() ...
+
+    def __estimate_collection_time(self, total_records):
+        """Estimates the amount of time it will take to collect a certain number of records"""
+
+        num_pulls = int(total_records/ITEMS_PER_PAGE)
+        if total_records % ITEMS_PER_PAGE == 0:
+            # Note if not divisibile, we don't need to subtract 1
+            # because there will really be 1 other pull not being counted
+            num_pulls -= 1
+        return num_pulls * self.config[API_TIMEOUT]
+
+    def __search(self, query, page):
+        """
+        Makes a code search request, JSON items result of the request are returned
+
+        Relevant API: https://docs.github.com/en/rest/search?apiVersion=2022-11-28#search-code
+        """
+
+        # Sleep between these code search hits, based on experience this is where we've seen rate limits
+        if page > 1:
+            time.sleep(self.config[API_TIMEOUT])
+        resp_json = self.__get_json(
+            f"https://api.github.com/search/code?q={make_urlstr(query)}+in:file+language:{make_urlstr(self.config[LANGUAGE])}&page={page}")
+
+        # 'items' is what we're interested in - so that needs to be there
+        assert 'items' in resp_json, f"Your token's rate limit has likely been exceeded. Try either (1) increasing your {API_TIMEOUT} configuration option or (2) trying a more refined query."
+
+        # each request includes the total records, after the first one estimate remaining time
+        if page == 1:
+            self.logger.info(
+                f"Estimated collection time = {make_nice_time(self.__estimate_collection_time(resp_json['total_count']))}")
+        return resp_json['items']
+
+    # Helper functions for __preview_record() ...
+
+    def __process_match_decision(self, record, decision):
+        """Processes user decision on whether current record is a match"""
+
+        if decision == YES_RESPONSE:
+            self.logger.debug(f"User accepted {record}")
+            return GithubScraper.PreviewResult.ACCEPTED
+        self.logger.debug(f"User rejected {record}")
+        return GithubScraper.PreviewResult.REJECTED
+
+    # Logging related helper functions ...
+
+    def __point_out_log(self):
+        """Informs to user about log, but doesn't log"""
+
+        print(
+            f"For more information, open {os.path.join(self.config[ROOT], LOG_BASENAME)}.", file=sys.stderr)
+
+    def __warn(self, message):
+        """Warns on the logger + points user to log"""
+
+        self.logger.warning(message)
+        self.__point_out_log()
+
+
+if __name__ == '__main__':
+    GithubScraper(get_config_filename())
