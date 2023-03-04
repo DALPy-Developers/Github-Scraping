@@ -7,6 +7,8 @@ The script `github_scraper` can be used for scraping GitHub repositories based o
 1. Download the repository to a folder identified based on the owner and repository name.
 2. Add a record of the download to a records file. 
 
+**Fall 2022 - Spring 2023**
+
 ## Prerequisites
 
 * This script has been tested on Python `3.9.2` and `3.10.6`. 
@@ -14,7 +16,7 @@ The script `github_scraper` can be used for scraping GitHub repositories based o
 
 ## Set-up 
 
-This script requires you to pass in a [TOML](https://toml.io/en/) configuration file. The following configuration options are required: `token` and `collection_root`.
+This script requires the user to pass in a [TOML](https://toml.io/en/) configuration file. The following configuration options are required: `token` and `collection_root`.
 
 * `token` must be a [GitHub personal access token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token) that must have at least `public_repo` permissions. Note that the account the token is associated will be one that's visibile in any issues that are raised by this script. Raising issues is discussed more below. 
 * `collection_root` must be a valid directory. This directory serves as the root folder for collecting GitHub repositories. The full use of this directory is described in detail below. 
@@ -32,6 +34,15 @@ One can also supply additional, optional configuration options. Their default va
 | `api_timeout` | `5` | The timeout in seconds that is placed between GitHub API calls to download pages of code search results. Increase this value if the scraper reports an API rate limit violation. These violations can occur if the query provided to the scraper is too broad. It can also occur for very "popular" assignments to post on GitHub (for Tufts folks, `gerp` is one example of this). |
 
 Any additional options that are specified (in valid TOML) are ignored.
+
+Here is an example configuration file we have used with the token redacted for security reasons: 
+
+```
+token="REDACTED"
+collection_root="assignment1"
+issue_contact_email="Swaminathan.Lamelas@tufts.edu"
+raise_issue=true
+```
 
 ### What is extra_directory?
 
@@ -72,7 +83,7 @@ To run the scraper, run `./github_scraper <configuration file>`.
 
 ### Setup Phase
 
-After loading in the configuration options you have provided, the records in `collection_root` are validated. A valid `collection_root` must obey the following properties related to records:  
+After loading in the configuration options a user has provided, the records in `collection_root` are validated. A valid `collection_root` must obey the following properties related to records:  
 
 * If `records.txt` exists in `collection_root`, then it must: 
     * Be a CSV file with columns `owner,repository,repository_url,download_timestamp`. 
@@ -87,25 +98,27 @@ If `queries.txt` exists in `collection_root` then each line of the file is inter
 
 Once the setup phase is complete, the user will be prompted with `Query (or @q to quit)? `. Here, the user should enter a query that is unique to the assignment of interest. This query will be passed in to search *code* on GitHub with the specified `language`. 
 
-Once the results for the search are collected, the scraper will begin to "preview" the search results to you one at a time. After displaying the beginning of the file, the user will need to press `Enter` in order to continue scrolling through the file (somewhat like the `less` Unix command). The preview will highlight lines of the previewed result in green that contain the query. The scraper **will not preview** results that belong to repositories that are listed in `records.txt`. This includes repositories that are discovered in the current scrape, so you may notice the `x` in the displayed line `[INFO] : Previewing file x/y` go faster than one at a time as repositories (and potentially corresponding future search results) are downloaded.
+Once the results for the search are collected, the scraper will begin to "preview" the search results to the user one at a time. After displaying the beginning of the file, the user will need to press `Enter` in order to continue scrolling through the file (somewhat like the `less` Unix command). The preview will highlight lines of the previewed result in green that contain the query. The scraper **will not preview** results that belong to repositories that are listed in `records.txt`. This includes repositories that are discovered in the current scrape, so a user may notice the `x` in the displayed line `[INFO] : Previewing file x/y` go faster than one at a time as repositories (and potentially corresponding future search results) are downloaded.
 
-Once you have determined if the previewed result is a match for an assignment, type `y` and press `Enter`. If you determine that the result is not a match, type `n` and press `Enter`. If you do not want to see any more previewed results for the most recent query, type `q` and press `Enter`. If you type anything else, it will be ignored and the preview will keep scrolling.
+Once a user has determined if the previewed result is a match for an assignment, type `y` and press `Enter`. If the user has determined that the result is not a match, type `n` and press `Enter`. If user does not want to see any more previewed results for the most recent query, type `q` and press `Enter`. If the user types anything else, it will be ignored and the preview will keep scrolling.
 
-If you reach the end of a preview by scrolling through it with `Enter`, you will be forced to select `y` or `n` before moving to the next result to preview.
+If the user reaches the end of a preview by scrolling through it with `Enter`, they will be forced to select `y` or `n` before moving to the next result to preview.
 
-### What happens when you say yes to a preview?
+Once the user has previewed all the search results for a query, they will be prompted again for another query (or to quit).
+
+### What happens when a user say yes to a preview?
 
 The repository will be downloaded to a folder named `owner_repository` inside `collection_root` and `records.txt` is appropriately updated. If `raise_issue = true`, then an issue is raised on the repository. If `extra_directory` is specified, then a folder is created as described [above](#what-is-extra_directory).
 
-If you say a result is not a match, *other results from that repository will still be shown* in future previews if they are part of the search results. 
+If the user says a result is not a match, *other results from that repository will still be shown* in future previews if they are part of the search results. 
 
 ## Debugging the Scraper
 
-The scraper also provides a detailed log in a file called `.github_scraper.log` in `collection_root`. By default, the scraper will append to the log, so if the file gets too large and unwieldy, you can simply delete the file. The log's primary intention is for diagnosing API related issues in case of API changes in the future.
+The scraper also provides a detailed log in a file called `.github_scraper.log` in `collection_root`. By default, the scraper will append to the log, so if the file gets too large and unwieldy, the user can simply delete the file. The log's primary intention is for diagnosing API related issues in case of API changes in the future.
 
 ## Additional Notes
 
-* It is possible that some repositories cannot be downloaded because they are too large. These should be manually investigated and you can use [this tool](https://download-directory.github.io/) to download a particular subfolder of a repository. 
+* It is possible that some repositories cannot be downloaded because they are too large. These should be manually investigated and one can use [this tool](https://download-directory.github.io/) to download a particular subfolder of a repository. 
 
 ## Potential Upgrades
 
