@@ -124,8 +124,10 @@ def make_urlstr(s):
 
 
 def preview_line(line, query, index):
-    """Previews a line in green if query is in it, else terminal default"""
+    """Previews a line in green if query is in it (case-insensitive), else terminal default"""
 
+    line = line.lower()
+    query = query.lower()
     print(('\033[92m' + line + '\033[0m') if query in line else line,
           end=("" if index >= INITIAL_PREVIEW_ROWS else "\n"))
 
@@ -307,6 +309,7 @@ class GithubScraper:
         # Github gives you the content as a base64 file, so we try to decode and then read line by line
         assert resp_json["encoding"] == "base64", "Unable to preview the contents of search result."
         file_content = base64.b64decode(resp_json['content']).decode('utf-8')
+        print("\n" + ("=" * int(os.get_terminal_size()[0]/2)))
         self.logger.info(f"Owner: {record.owner} Repository: {record.repo}\n")
         for index, line in enumerate(file_content.splitlines()):
             preview_line(line, query, index)

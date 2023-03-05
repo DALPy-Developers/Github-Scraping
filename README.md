@@ -122,6 +122,7 @@ The scraper also provides a detailed log in a file called `.github_scraper.log` 
 
 ## Potential Upgrades
 
+* One nicety for users that could be added is to add a "keep" or "maybe" option when previewing a search result. At the moment, responding `n` in preview mode does do this. With the addition of this new option, `n` would act similarly to `y` in that repositories where a search record has been rejected will not be shown in future previews. The new option would just keep repositories in for future previews after responding with the new option to a preview. We think this could help a user go more quickly through previews.
 * One possible optimization one could make is to download repositories in a separate thread. That way, users can go to preview the next search record while the download occurs in the background. However, one will need to take care that the user is not asked to preview a record that is currently part of the repository that is being downloaded since it may not be considered downloaded yet. One possible solution to this is to sort the collected records to preview by the owner and repository so that those can be skipped in a batch while the repository download is occuring in the background. 
 
 ## Authors
