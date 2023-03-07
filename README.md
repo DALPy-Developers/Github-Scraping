@@ -132,6 +132,10 @@ The scraper also provides a detailed log in a file called `.github_scraper.log` 
 
 ## Changelog
 
+### 3.7.2023
+
+Add support for ~ in paths (ROOT, EXTRA_DIRECTORY).
+
 ### 3.1.2023
 
 Major updates for spring 2023 use in Tufts COMP 15 including: 
