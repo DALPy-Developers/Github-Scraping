@@ -12,6 +12,7 @@ The script `github_scraper` can be used for scraping GitHub repositories based o
 ## Prerequisites
 
 * This script has been tested on Python `3.9.2` and `3.10.6`. 
+* The [toml module](https://pypi.org/project/toml/) which is installable via PyPI.
 * To run on Linux, ensure it's executable by the user. For other platforms, remove shebang and run in a Python environment.
 
 ## Set-up 
