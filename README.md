@@ -32,7 +32,7 @@ One can also supply additional, optional configuration options. Their default va
 | `issue_contact_email` | `"No additional contact information was provided."` | Contact information that is appended to the end of `issue_body` in issues raised by the scraper. |
 | `language` | `"c++"` | Restricts the GitHub code search to this particular language. See [GitHub search](https://github.com/search/advanced?q=Sample&type=Repositories) for a full list of available languages. |
 | `extra_directory` | `None` | See [What is extra_directory?](#what-is-extra_directory). |
-| `api_timeout` | `5` | The timeout in seconds that is placed between GitHub API calls to download pages of code search results. Increase this value if the scraper reports an API rate limit violation. These violations can occur if the query provided to the scraper is too broad. It can also occur for very "popular" assignments to post on GitHub (for Tufts folks, `gerp` is one example of this). |
+| `api_timeout` | `5` | The timeout in seconds that is placed between GitHub API calls to download pages of code search results. Increase this value if the scraper reports an API rate limit violation. These violations can occur if the query provided to the scraper is too broad. It can also occur for very "popular" assignments to post on GitHub (for Tufts folks, `gerp` is one example of this). This timeout may be too low, if you see an error being reported about an API rate limit violation, you can go to [GitHub](https://github.com/) and try searching the same query and see if there are hundreds of results for code in the `language` you specified. |
 
 Any additional options that are specified (in valid TOML) are ignored.
 
@@ -132,6 +132,11 @@ The scraper also provides a detailed log in a file called `.github_scraper.log` 
 * [Eitan Joseph](https://github.com/EitanJoseph)
 
 ## Changelog
+
+### 4.23.2023
+
+Added displayed message when query yielded no records to preview.
+Updated README with more information about rate limit violations.
 
 ### 3.7.2023
 
