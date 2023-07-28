@@ -6,6 +6,10 @@ download_repo.py
 query.py
 *.zip
 tmproot/
+tmproot2/
+extra/
+extra2/
+custom.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

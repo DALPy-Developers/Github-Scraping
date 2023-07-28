@@ -5,12 +5,12 @@ Script for scraping GitHubs based on a keyword.
 
 This script must have 750 permissions to run on Linux.
 
-Version: 4.23.2023
+Version: 7.28.2023
 
 See https://github.com/DALPy-Developers/Github-Scraping for the most up to date version.
 
 Authors: Chami Lamelas (slamel01), Eitan Joseph
-Date: Fall 2022 - Spring 2023
+Date: Fall 2022 - Summer 2023
 """
 
 from enum import Enum
@@ -28,6 +28,8 @@ import csv
 import os
 import argparse
 from pathlib import Path
+import importlib
+import inspect
 
 # toml module (from PyPI) is used in place of tomllib (Python standard library) as tomllib
 # will only be available in Python 3.11.x and Tufts server runs Python 3.9.2.
@@ -49,6 +51,8 @@ ISSUE_CONTACT = 'issue_contact_email'
 LANGUAGE = 'language'
 EXTRA_DIRECTORY = 'extra_directory'
 API_TIMEOUT = 'api_timeout'
+CUSTOMS_FILE = 'custom_file'
+FILE_FILTER = 'file_filter'
 
 # TOML defaults for non-required TOML options ...
 DEFAULTS = {
@@ -58,7 +62,9 @@ DEFAULTS = {
     ISSUE_CONTACT: "No additional contact information was provided.",
     LANGUAGE: "c++",
     EXTRA_DIRECTORY: None,
-    API_TIMEOUT: 5
+    API_TIMEOUT: 5,
+    CUSTOMS_FILE: None,
+    FILE_FILTER: lambda _: False
 }
 
 # Basenames of various files that will be placed in ROOT
@@ -160,6 +166,20 @@ def make_nice_time(sec):
 
     mins, sec = divmod(sec, 60)
     return f"{mins}m {sec}s" if mins > 0 else (str(sec) + "s")
+
+
+def get_func_byname(module, func_name, module_name):
+    """Gets function object by name from module object, errors are thrown if a function with that name cannot be created"""
+
+    assert hasattr(
+        module, func_name), f"{module_name} does not have attribute {func_name}"
+    func = getattr(module, func_name)
+    assert inspect.isfunction(
+        func), f"{func_name} is not a function in {module_name}"
+    # Note this does not check if the function takes a single parameter, but we assume that a user could
+    # figure this out from the traceback who is comfortable enough with Python to write a custom function
+    # to pass in here
+    return func
 
 
 class GithubScraper:
@@ -350,8 +370,10 @@ class GithubScraper:
             f.write(response.content)
         try:
             with zipfile.ZipFile(archive, 'r') as zip_ref:
-                zip_ref.extractall(os.path.join(
-                    self.config[ROOT], record.get_dirbasename()))
+                extraction_path = os.path.join(
+                    self.config[ROOT], record.get_dirbasename())
+                zip_ref.extractall(extraction_path)
+                self.__filter_files(extraction_path)
             self.logger.debug(
                 f"Completed download into {record.get_dirbasename()}")
         except FileNotFoundError as e:
@@ -476,6 +498,33 @@ class GithubScraper:
                 self.config[EXTRA_DIRECTORY] = os.path.expanduser(
                     self.config[EXTRA_DIRECTORY])
         check_and_make(self.config[ROOT])
+        self.__load_custom()
+
+    def __load_custom(self):
+        """Loads custom functions from provided file into class attributes to be used later"""
+
+        if self.config[CUSTOMS_FILE] is not None:
+            # CUSTOMS_FILE is user provided path so we again expand ~ to home dir and make sure
+            # file exists and is a Python file
+            self.config[CUSTOMS_FILE] = os.path.expanduser(
+                self.config[CUSTOMS_FILE])
+            assert os.path.isfile(
+                self.config[CUSTOMS_FILE]), f"{CUSTOMS_FILE} does not exist!"
+            assert self.config[CUSTOMS_FILE].endswith(
+                ".py"), f"{CUSTOMS_FILE} must be a Python file"
+
+            # Add python file to path and then import the module (assumed to be x if CUSTOM_PATH is PATH/TO/x.py)
+            sys.path.append(os.path.dirname(self.config[CUSTOMS_FILE]))
+            module_name = os.path.basename(
+                self.config[CUSTOMS_FILE])[:-len(".py")]
+            custom_module = importlib.import_module(module_name)
+
+            # Now, load the functions themselves using helper -- substitute defaults if the function can't be
+            # found (remember this can be entered if FILE_FILTER is specified)
+            self.file_filter = get_func_byname(
+                custom_module, self.config[FILE_FILTER], module_name)
+        else:
+            self.file_filter = DEFAULTS[FILE_FILTER]
 
     def __init_records(self):
         """
@@ -568,6 +617,21 @@ class GithubScraper:
             return GithubScraper.PreviewResult.ACCEPTED
         self.logger.debug(f"User rejected {record}")
         return GithubScraper.PreviewResult.REJECTED
+
+    # Helper functions for __download_record() ...
+
+    def __filter_files(self, extraction_path):
+        """Deletes all files who self.file_filter( ) says to delete"""
+
+        files_to_delete = list()
+        for dirpath, _, filenames in os.walk(extraction_path):
+            for filename in filenames:
+                filepath = os.path.join(dirpath, filename)
+                if self.file_filter(filepath):
+                    files_to_delete.append(filepath)
+        print(files_to_delete)
+        for filepath in files_to_delete:
+            os.remove(filepath)
 
     # Logging related helper functions ...
 

@@ -33,6 +33,8 @@ One can also supply additional, optional configuration options. Their default va
 | `language` | `"c++"` | Restricts the GitHub code search to this particular language. See [GitHub search](https://github.com/search/advanced?q=Sample&type=Repositories) for a full list of available languages. |
 | `extra_directory` | `None` | See [What is extra_directory?](#what-is-extra_directory). |
 | `api_timeout` | `5` | The timeout in seconds that is placed between GitHub API calls to download pages of code search results. Increase this value if the scraper reports an API rate limit violation. These violations can occur if the query provided to the scraper is too broad. It can also occur for very "popular" assignments to post on GitHub (for Tufts folks, `gerp` is one example of this). This timeout may be too low, if you see an error being reported about an API rate limit violation, you can go to [GitHub](https://github.com/) and try searching the same query and see if there are hundreds of results for code in the `language` you specified. |
+| `custom_file` | `None` | Path to a Python source file that contains `file_filter` function. Read about `file_filter` for more information. Such a file does not need to be provided. |
+| `file_filter` | `lambda _: False` | Python function that specifies, given a file path, whether or not that file should be deleted after scraping. Typically, students' GitHub repositories are filled with all kinds of stuff we don't need to record (binary files, large data files, `stdout` dumps, etc.). This provides a user with the capability to remove all of that after the downloaded repositories are extracted. In the event this is not provided, we keep all file paths by default. |
 
 Any additional options that are specified (in valid TOML) are ignored.
 
@@ -125,6 +127,7 @@ The scraper also provides a detailed log in a file called `.github_scraper.log` 
 
 * One nicety for users that could be added is to add a "keep" or "maybe" option when previewing a search result. At the moment, responding `n` in preview mode does do this. With the addition of this new option, `n` would act similarly to `y` in that repositories where a search record has been rejected will not be shown in future previews. The new option would just keep repositories in for future previews after responding with the new option to a preview. We think this could help a user go more quickly through previews.
 * One possible optimization one could make is to download repositories in a separate thread. That way, users can go to preview the next search record while the download occurs in the background. However, one will need to take care that the user is not asked to preview a record that is currently part of the repository that is being downloaded since it may not be considered downloaded yet. One possible solution to this is to sort the collected records to preview by the owner and repository so that those can be skipped in a batch while the repository download is occuring in the background. 
+* Move TOML scraping to utilize a dataclass versus constants and default dictionary.
 
 ## Authors
 
@@ -132,6 +135,10 @@ The scraper also provides a detailed log in a file called `.github_scraper.log` 
 * [Eitan Joseph](https://github.com/EitanJoseph)
 
 ## Changelog
+
+### 7.28.2023
+
+Added `custom_file` and `file_filter` capabilities to delete certain files from repositories that would be useless (e.g. binaries, Valgrind output).
 
 ### 5.1.2023
 
