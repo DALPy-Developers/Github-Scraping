@@ -7,11 +7,11 @@ The script `github_scraper` can be used for scraping GitHub repositories based o
 1. Download the repository to a folder identified based on the owner and repository name.
 2. Add a record of the download to a records file. 
 
-**Fall 2022 - Spring 2023**
+**Fall 2022 - Summer 2023**
 
 ## Prerequisites
 
-* This script has been tested on Python `3.9.2` and `3.10.6`. 
+* This script has been tested on Python `3.9.2`, `3.10.6`, and `3.10.12`. 
 * Install the prerequisites on `pip install -r requirements.txt`.
 * To run on Linux, ensure it's executable by the user. For other platforms, remove shebang and run in a Python environment.
 
@@ -35,6 +35,8 @@ One can also supply additional, optional configuration options. Their default va
 | `api_timeout` | `5` | The timeout in seconds that is placed between GitHub API calls to download pages of code search results. Increase this value if the scraper reports an API rate limit violation. These violations can occur if the query provided to the scraper is too broad. It can also occur for very "popular" assignments to post on GitHub (for Tufts folks, `gerp` is one example of this). This timeout may be too low, if you see an error being reported about an API rate limit violation, you can go to [GitHub](https://github.com/) and try searching the same query and see if there are hundreds of results for code in the `language` you specified. |
 | `custom_file` | `None` | Path to a Python source file that contains `file_filter` function. Read about `file_filter` for more information. Such a file does not need to be provided. |
 | `file_filter` | `lambda _: False` | Python function that specifies, given a file path, whether or not that file should be deleted after scraping. Typically, students' GitHub repositories are filled with all kinds of stuff we don't need to record (binary files, large data files, `stdout` dumps, etc.). This provides a user with the capability to remove all of that after the downloaded repositories are extracted. In the event this is not provided, we keep all file paths by default. |
+| `extra_work` | `lambda _: None` | See [What is extra_directory?](#what-is-extra_directory). |
+| `extra_work_args` | `dict()` | See [What is extra_directory?](#what-is-extra_directory). |
 
 Any additional options that are specified (in valid TOML) are ignored.
 
@@ -76,7 +78,16 @@ collection_root/
                 ...
 ```
 
-Suppose we have `extra_directory` set to `assignment1_moss`. Then the scraper will create `assignment1_moss/ChamiLamelas_Tufts`. **It will not move any files into it**. The user will need to go into `collection_root/ChamiLamelas_Tufts/COMP15/assignment1` and copy the appropriate files into `assignment1_moss/ChamiLamelas_Tufts` in preparation for future `MOSS` jobs.
+Suppose we have `extra_directory` set to `assignment1_moss`. Then the scraper will create `assignment1_moss/ChamiLamelas_Tufts`.
+Once that is done, the scraper will run `extra_work`. `extra_work` takes three parameters: 
+
+1. The filepath to the downloaded record folder (e.g. `collection_root/ChamiLamelas_Tufts/COMP15/assignment1`).
+2. The filepath to the created extra directory (e.g. `assignment1_moss/ChamiLamelas_Tufts`).
+3. `extra_work_args` which is a dictionary of additional arguments specified in the configuration file.
+
+By default `extra_work` does nothing, in which case the user will need to go into `collection_root/ChamiLamelas_Tufts/COMP15/assignment1` and copy the appropriate files into `assignment1_moss/ChamiLamelas_Tufts` in preparation for future `MOSS` jobs. 
+
+However, one can make an `extra_work` Python function that copies some specific files from `collection_root/ChamiLamelas_Tufts/COMP15/assignment1` to `assignment1_moss/ChamiLamelas_Tufts`. For example, one could copy files from directories that contain some target files. For instance, suppose we know `assignment1` has a file `A.cpp`. Our `extra_work` could supply `A.cpp` in `extra_work_args` and then copy over all files from a directory that contains an instance of `A.cpp`. This provides a way of "finding" a student's actual submission for the assignment of interest if they have a very full GitHub repository.
 
 Note, if `extra_directory` exists and has any contents, none of those contents are modified. By default, no extra directories are created.
 
@@ -127,7 +138,7 @@ The scraper also provides a detailed log in a file called `.github_scraper.log` 
 
 * One nicety for users that could be added is to add a "keep" or "maybe" option when previewing a search result. At the moment, responding `n` in preview mode does do this. With the addition of this new option, `n` would act similarly to `y` in that repositories where a search record has been rejected will not be shown in future previews. The new option would just keep repositories in for future previews after responding with the new option to a preview. We think this could help a user go more quickly through previews.
 * One possible optimization one could make is to download repositories in a separate thread. That way, users can go to preview the next search record while the download occurs in the background. However, one will need to take care that the user is not asked to preview a record that is currently part of the repository that is being downloaded since it may not be considered downloaded yet. One possible solution to this is to sort the collected records to preview by the owner and repository so that those can be skipped in a batch while the repository download is occuring in the background. 
-* Move TOML scraping to utilize a dataclass versus constants and default dictionary.
+* Move TOML scraping to utilize a `dataclass` versus constants and default dictionary.
 
 ## Authors
 
@@ -135,6 +146,10 @@ The scraper also provides a detailed log in a file called `.github_scraper.log` 
 * [Eitan Joseph](https://github.com/EitanJoseph)
 
 ## Changelog
+
+### 7.31.2023
+
+Added `extra_work` and `extra_work_args` to provide the capability for extra work to be done of the user's choosing after extra directories are made. This can be used to copy some files into the extra directory instead of doing nothing.
 
 ### 7.28.2023
 
@@ -151,7 +166,7 @@ Updated README with more information about rate limit violations.
 
 ### 3.7.2023
 
-Add support for ~ in paths (ROOT, EXTRA_DIRECTORY).
+Add support for ~ in paths (`ROOT`, `EXTRA_DIRECTORY`).
 
 ### 3.1.2023
 

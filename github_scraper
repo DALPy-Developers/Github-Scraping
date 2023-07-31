@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 
 """
-Script for scraping GitHubs based on a keyword.
+Script for scraping GitHubs based on a keyword made to be a pipeline into running MOSS.
 
 This script must have 750 permissions to run on Linux.
 
-Version: 7.28.2023
+Version: 7.31.2023
 
 See https://github.com/DALPy-Developers/Github-Scraping for the most up to date version.
 
@@ -53,6 +53,8 @@ EXTRA_DIRECTORY = 'extra_directory'
 API_TIMEOUT = 'api_timeout'
 CUSTOMS_FILE = 'custom_file'
 FILE_FILTER = 'file_filter'
+EXTRA_WORK = 'extra_work'
+EXTRA_WORK_ARGS = 'extra_work_args'
 
 # TOML defaults for non-required TOML options ...
 DEFAULTS = {
@@ -64,7 +66,9 @@ DEFAULTS = {
     EXTRA_DIRECTORY: None,
     API_TIMEOUT: 5,
     CUSTOMS_FILE: None,
-    FILE_FILTER: lambda _: False
+    FILE_FILTER: None,
+    EXTRA_WORK: None,
+    EXTRA_WORK_ARGS: dict()
 }
 
 # Basenames of various files that will be placed in ROOT
@@ -90,6 +94,18 @@ ISSUE_CREATED = 201
 ISSUES_DISABLED = 410
 ITEMS_PER_PAGE = 30
 GET_OK = 200
+
+
+def alwaysfalse(_):
+    """Function that always returns false"""
+
+    return False
+
+
+def doesnothing(x, y, z):
+    """Function that does nothing but takes 3 parameters"""
+
+    pass
 
 
 def get_config_filename():
@@ -168,14 +184,15 @@ def make_nice_time(sec):
     return f"{mins}m {sec}s" if mins > 0 else (str(sec) + "s")
 
 
-def get_func_byname(module, func_name, module_name):
+def get_func_byname(module, func_name, substitute):
     """Gets function object by name from module object, errors are thrown if a function with that name cannot be created"""
 
-    assert hasattr(
-        module, func_name), f"{module_name} does not have attribute {func_name}"
+    if func_name is None or not hasattr(module, func_name):
+        return substitute
     func = getattr(module, func_name)
-    assert inspect.isfunction(
-        func), f"{func_name} is not a function in {module_name}"
+    if not inspect.isfunction(func):
+        return substitute
+
     # Note this does not check if the function takes a single parameter, but we assume that a user could
     # figure this out from the traceback who is comfortable enough with Python to write a custom function
     # to pass in here
@@ -217,6 +234,11 @@ class GithubScraper:
             """Gets a directory basename that, within the parent directory, is a valid (database) key for a record"""
 
             return self.owner + "_" + self.repo
+
+        def get_download_path(self, download_root):
+            """Gets the download path of a record"""
+
+            return os.path.join(download_root, self.get_dirbasename())
 
         def __str__(self):
             """String representation of result - used in logging"""
@@ -370,10 +392,9 @@ class GithubScraper:
             f.write(response.content)
         try:
             with zipfile.ZipFile(archive, 'r') as zip_ref:
-                extraction_path = os.path.join(
-                    self.config[ROOT], record.get_dirbasename())
-                zip_ref.extractall(extraction_path)
-                self.__filter_files(extraction_path)
+                zip_ref.extractall(record.get_download_path(self.config[ROOT]))
+                self.__filter_files(
+                    record.get_download_path(self.config[ROOT]))
             self.logger.debug(
                 f"Completed download into {record.get_dirbasename()}")
         except FileNotFoundError as e:
@@ -387,8 +408,11 @@ class GithubScraper:
         """Makes an extra directory corresponding to record"""
 
         if self.config[EXTRA_DIRECTORY] is not None:
-            Path(os.path.join(self.config[EXTRA_DIRECTORY], record.get_dirbasename())).mkdir(
-                parents=True, exist_ok=True)
+            extra_dir_path = os.path.join(
+                self.config[EXTRA_DIRECTORY], record.get_dirbasename())
+            Path(extra_dir_path).mkdir(parents=True, exist_ok=True)
+            self.extra_work(record.get_download_path(self.config[ROOT]),
+                            extra_dir_path, self.config[EXTRA_WORK_ARGS])
 
     def __add_record(self, record):
         """Adds a record to the records file"""
@@ -509,7 +533,7 @@ class GithubScraper:
             self.config[CUSTOMS_FILE] = os.path.expanduser(
                 self.config[CUSTOMS_FILE])
             assert os.path.isfile(
-                self.config[CUSTOMS_FILE]), f"{CUSTOMS_FILE} does not exist!"
+                self.config[CUSTOMS_FILE]), f"{CUSTOMS_FILE} does not exist"
             assert self.config[CUSTOMS_FILE].endswith(
                 ".py"), f"{CUSTOMS_FILE} must be a Python file"
 
@@ -520,11 +544,14 @@ class GithubScraper:
             custom_module = importlib.import_module(module_name)
 
             # Now, load the functions themselves using helper -- substitute defaults if the function can't be
-            # found (remember this can be entered if FILE_FILTER is specified)
+            # found (remember this can be entered if only 1 of FILE_FILTER, EXTRA_WORK is specified)
             self.file_filter = get_func_byname(
-                custom_module, self.config[FILE_FILTER], module_name)
+                custom_module, self.config[FILE_FILTER], alwaysfalse)
+            self.extra_work = get_func_byname(
+                custom_module, self.config[EXTRA_WORK], doesnothing)
         else:
-            self.file_filter = DEFAULTS[FILE_FILTER]
+            self.file_filter = alwaysfalse
+            self.extra_work = doesnothing
 
     def __init_records(self):
         """
@@ -629,7 +656,6 @@ class GithubScraper:
                 filepath = os.path.join(dirpath, filename)
                 if self.file_filter(filepath):
                     files_to_delete.append(filepath)
-        print(files_to_delete)
         for filepath in files_to_delete:
             os.remove(filepath)
 

@@ -10,6 +10,7 @@ tmproot2/
 extra/
 extra2/
 custom.py
+test/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
