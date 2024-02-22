@@ -7,7 +7,7 @@ The script `github_scraper` can be used for scraping GitHub repositories based o
 1. Download the repository to a folder identified based on the owner and repository name.
 2. Add a record of the download to a records file. 
 
-**Fall 2022 - Summer 2023**
+**Fall 2022 - Spring 2024**
 
 ## Prerequisites
 
@@ -29,11 +29,11 @@ One can also supply additional, optional configuration options. Their default va
 | `raise_issue` | `false` | Whether or not an issue should be raised on repositories that are deemed a match by the user of the scraper. |
 | `issue_title` | `"TUFTS COMP15 IMPORTANT"` | The title of any issues that are raised by the scraper. |
 | `issue_body` | `"We noticed you have publicly posted the solution to an assignment in Tufts University course CS15. Please either delete this repository or make it private ASAP. In the past, we've had issues with students plagiarizing code they find on GitHub."` | The body of any issues that are raised by the scraper. |
-| `issue_contact_email` | `"No additional contact information was provided."` | Contact information that is appended to the end of `issue_body` in issues raised by the scraper. |
+| `issue_contact_email` | `"If you have additional questions, please send an email to the current course instructor listed on the CS 15 website: https://www.cs.tufts.edu/comp/15/"` | Contact information that is appended to the end of `issue_body` in issues raised by the scraper. |
 | `language` | `"c++"` | Restricts the GitHub code search to this particular language. See [GitHub search](https://github.com/search/advanced?q=Sample&type=Repositories) for a full list of available languages. |
 | `extra_directory` | `None` | See [What is extra_directory?](#what-is-extra_directory). |
 | `api_timeout` | `5` | The timeout in seconds that is placed between GitHub API calls to download pages of code search results. Increase this value if the scraper reports an API rate limit violation. These violations can occur if the query provided to the scraper is too broad. It can also occur for very "popular" assignments to post on GitHub (for Tufts folks, `gerp` is one example of this). This timeout may be too low, if you see an error being reported about an API rate limit violation, you can go to [GitHub](https://github.com/) and try searching the same query and see if there are hundreds of results for code in the `language` you specified. |
-| `custom_file` | `None` | Path to a Python source file that contains `file_filter` function. Read about `file_filter` for more information. Such a file does not need to be provided. |
+| `custom_file` | `None` | Path to a Python source file that contains the `file_filter` and `extra_work` functions. Read about `file_filter` and `extra_work` for more information. Such a file does not need to be provided. |
 | `file_filter` | `lambda _: False` | Python function that specifies, given a file path, whether or not that file should be deleted after scraping. Typically, students' GitHub repositories are filled with all kinds of stuff we don't need to record (binary files, large data files, `stdout` dumps, etc.). This provides a user with the capability to remove all of that after the downloaded repositories are extracted. In the event this is not provided, we keep all file paths by default. |
 | `extra_work` | `lambda _: None` | See [What is extra_directory?](#what-is-extra_directory). |
 | `extra_work_args` | `dict()` | See [What is extra_directory?](#what-is-extra_directory). |
@@ -45,7 +45,6 @@ Here is an example configuration file we have used with the token redacted for s
 ```
 token="REDACTED"
 collection_root="assignment1"
-issue_contact_email="Swaminathan.Lamelas@tufts.edu"
 raise_issue=true
 ```
 
@@ -146,6 +145,10 @@ The scraper also provides a detailed log in a file called `.github_scraper.log` 
 * [Eitan Joseph](https://github.com/EitanJoseph)
 
 ## Changelog
+
+### 2.21.2024
+
+Updated default `issue_contact_email` to refer to the Tufts CS15 website.
 
 ### 7.31.2023
 
