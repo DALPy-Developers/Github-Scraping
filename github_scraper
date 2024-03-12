@@ -5,7 +5,7 @@ Script for scraping GitHubs based on a keyword made to be a pipeline into runnin
 
 This script must have 750 permissions to run on Linux.
 
-Version: 2.21.2024
+Version: 3.12.2024
 
 See https://github.com/DALPy-Developers/Github-Scraping for the most up to date version.
 
@@ -74,7 +74,7 @@ DEFAULTS = {
 # Basenames of various files that will be placed in ROOT
 RECORDS_BASENAME = "records.txt"
 QUERIES_BASENAME = "queries.txt"
-LOG_BASENAME = ".github_scraper.log"
+LOG_BASENAME = "github_scraper.log"
 TMP_ARCHIVE_BASENAME = ".github_scraper.zip"
 
 # Formatting for records file
