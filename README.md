@@ -146,6 +146,10 @@ The scraper also provides a detailed log in a file called `.github_scraper.log` 
 
 ## Changelog
 
+### 3.12.2024
+
+Made log file not hidden for usability.
+
 ### 2.21.2024
 
 Updated default `issue_contact_email` to refer to the Tufts CS15 website.
