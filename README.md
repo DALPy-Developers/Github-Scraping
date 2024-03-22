@@ -144,6 +144,10 @@ The scraper also provides a detailed log in a file called `.github_scraper.log` 
 * [Chami Lamelas](https://sites.google.com/brandeis.edu/chamilamelas) 
 * [Eitan Joseph](https://github.com/EitanJoseph)
 
+## Acknowledgements
+
+* [Matt Russell](https://www.linkedin.com/in/matthew-russell-152a4414/) -- I took the idea of allowing users to specify their own file filtering, extra work as functions in a Python file based on what Matt does with `canonicalizers.py` in his [CS 15 autograder](https://gitlab.cs.tufts.edu/mrussell/gradescope-autograder). I also used his approach of loading TOML files into Python dataclasses.
+
 ## Changelog
 
 ### 3.22.2024
