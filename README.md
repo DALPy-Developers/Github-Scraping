@@ -1,4 +1,4 @@
-# GitHub Scraping 
+# GitHub Scraping Tool
 
 ## Description
 
@@ -7,13 +7,15 @@ The script `github_scraper` can be used for scraping GitHub repositories based o
 1. Download the repository to a folder identified based on the owner and repository name.
 2. Add a record of the download to a records file. 
 
-**Fall 2022 - Spring 2024**
+It can do even more including raising issues and preparing a folder for MOSS.
+
+**Fall 2022 - Present**
 
 ## Prerequisites
 
 * This script has been tested on Python `3.9.2`, `3.10.6`, and `3.10.12`. 
 * Install the prerequisites on `pip install -r requirements.txt`.
-* To run on Linux, ensure it's executable by the user. For other platforms, remove shebang and run in a Python environment.
+* To run on Unix systems, ensure it's executable by the user. For other platforms, run in a Python environment.
 
 ## Set-up 
 
@@ -36,7 +38,7 @@ One can also supply additional, optional configuration options. Their default va
 | `custom_file` | `None` | Path to a Python source file that contains the `file_filter` and `extra_work` functions. Read about `file_filter` and `extra_work` for more information. Such a file does not need to be provided. |
 | `file_filter` | `lambda _: False` | Python function that specifies, given a file path, whether or not that file should be deleted after scraping. Typically, students' GitHub repositories are filled with all kinds of stuff we don't need to record (binary files, large data files, `stdout` dumps, etc.). This provides a user with the capability to remove all of that after the downloaded repositories are extracted. In the event this is not provided, we keep all file paths by default. |
 | `extra_work` | `lambda _: None` | See [What is extra_directory?](#what-is-extra_directory). |
-| `extra_work_args` | `dict()` | See [What is extra_directory?](#what-is-extra_directory). |
+| `extra_work_args` | `{ }` | See [What is extra_directory?](#what-is-extra_directory). |
 
 Any additional options that are specified (in valid TOML) are ignored.
 
@@ -50,7 +52,7 @@ raise_issue=true
 
 ### What is extra_directory?
 
-This script can be used as a prepatory step for running [MOSS](https://theory.stanford.edu/~aiken/moss/), for example via [this wrapper](https://gitlab.cs.tufts.edu/slamel01/comp15-moss). For `MOSS` a submission is considered a directory that just includes their source files for an assignment. For example: 
+This script can be used as a prepatory step for running [MOSS](https://theory.stanford.edu/~aiken/moss/), for example via [this wrapper](https://github.com/ChamiLamelas/moss-wrapper/tree/main). For `MOSS` a submission is considered a directory that just includes their source files for an assignment. For example: 
 
 ```
 submission_folder/
@@ -113,17 +115,17 @@ Once the setup phase is complete, the user will be prompted with `Query (or @q t
 
 Once the results for the search are collected, the scraper will begin to "preview" the search results to the user one at a time. After displaying the beginning of the file, the user will need to press `Enter` in order to continue scrolling through the file (somewhat like the `less` Unix command). The preview will highlight lines of the previewed result in green that contain the query. The scraper **will not preview** results that belong to repositories that are listed in `records.txt`. This includes repositories that are discovered in the current scrape, so a user may notice the `x` in the displayed line `[INFO] : Previewing file x/y` go faster than one at a time as repositories (and potentially corresponding future search results) are downloaded.
 
-Once a user has determined if the previewed result is a match for an assignment, type `y` and press `Enter`. If the user has determined that the result is not a match, type `n` and press `Enter`. If user does not want to see any more previewed results for the most recent query, type `q` and press `Enter`. If the user types anything else, it will be ignored and the preview will keep scrolling.
+Once a user has determined if the previewed result is a match for an assignment, type `y` and press `Enter`. If the user has determined that the result is not a match, type `n` and press `Enter`. If the user has determined that the result may be a match and wants to see other contents of said repository, type `m` and press `Enter`. If user does not want to see any more previewed results for the most recent query, type `q` and press `Enter`. If the user types anything else, it will be ignored and the preview will keep scrolling.
 
 If the user reaches the end of a preview by scrolling through it with `Enter`, they will be forced to select `y` or `n` before moving to the next result to preview.
 
 Once the user has previewed all the search results for a query, they will be prompted again for another query (or to quit).
 
-### What happens when a user say yes to a preview?
+### What happens when a user say yes, maybe, and no to a preview?
 
 The repository will be downloaded to a folder named `owner_repository` inside `collection_root` and `records.txt` is appropriately updated. If `raise_issue = true`, then an issue is raised on the repository. If `extra_directory` is specified, then a folder is created as described [above](#what-is-extra_directory).
 
-If the user says a result is not a match, *other results from that repository will still be shown* in future previews if they are part of the search results. 
+If the user says a result is maybe a match, *other results from that repository will still be shown* in future previews if they are part of the search results. If the user says a result is not a match, *other results from that repository will not be shown in this scrape*. However, results will be shown in future scrapes (as we don't save declined repositories).
 
 ## Debugging the Scraper
 
@@ -135,9 +137,7 @@ The scraper also provides a detailed log in a file called `.github_scraper.log` 
 
 ## Potential Upgrades
 
-* One nicety for users that could be added is to add a "keep" or "maybe" option when previewing a search result. At the moment, responding `n` in preview mode does do this. With the addition of this new option, `n` would act similarly to `y` in that repositories where a search record has been rejected will not be shown in future previews. The new option would just keep repositories in for future previews after responding with the new option to a preview. We think this could help a user go more quickly through previews.
-* One possible optimization one could make is to download repositories in a separate thread. That way, users can go to preview the next search record while the download occurs in the background. However, one will need to take care that the user is not asked to preview a record that is currently part of the repository that is being downloaded since it may not be considered downloaded yet. One possible solution to this is to sort the collected records to preview by the owner and repository so that those can be skipped in a batch while the repository download is occuring in the background. 
-* Move TOML scraping to utilize a `dataclass` versus constants and default dictionary.
+* One possible optimization one could make is to download repositories in a separate process. That way, users can go to preview the next search record while the download occurs in the background. However, one will need to take care that the user is not asked to preview a record that is currently part of the repository that is being downloaded since it may not be considered downloaded yet. One possible solution to this is to sort the collected records to preview by the owner and repository so that those can be skipped in a batch while the repository download is occuring in the background. 
 
 ## Authors
 
@@ -146,44 +146,41 @@ The scraper also provides a detailed log in a file called `.github_scraper.log` 
 
 ## Changelog
 
-### 3.12.2024
+### 3.22.2024
+* Clean up configuration by loading TOML into a dataclass instead of a dictionary and then separately handling defaults.
+* Added a maybe option to previews that functioned like the old no. Now, no will no longer show previews from the repository that was rejected.
+* Minor improvements to error reporting.
+* Additional minor code refactoring. 
 
-Made log file not hidden for usability.
+### 3.12.2024
+* Made log file not hidden for usability.
 
 ### 2.21.2024
-
-Updated default `issue_contact_email` to refer to the Tufts CS15 website.
+* Updated default `issue_contact_email` to refer to the Tufts CS15 website.
 
 ### 7.31.2023
-
-Added `extra_work` and `extra_work_args` to provide the capability for extra work to be done of the user's choosing after extra directories are made. This can be used to copy some files into the extra directory instead of doing nothing.
+* Added `extra_work` and `extra_work_args` to provide the capability for extra work to be done of the user's choosing after extra directories are made. This can be used to copy some files into the extra directory instead of doing nothing.
 
 ### 7.28.2023
-
-Added `custom_file` and `file_filter` capabilities to delete certain files from repositories that would be useless (e.g. binaries, Valgrind output).
+* Added `custom_file` and `file_filter` capabilities to delete certain files from repositories that would be useless (e.g. binaries, Valgrind output).
 
 ### 5.1.2023
-
-Added `requirements.txt`.
+* Added `requirements.txt`.
 
 ### 4.23.2023
-
-Added displayed message when query yielded no records to preview.
-Updated README with more information about rate limit violations.
+* Added displayed message when query yielded no records to preview.
+* Updated README with more information about rate limit violations.
 
 ### 3.7.2023
-
-Add support for ~ in paths (`ROOT`, `EXTRA_DIRECTORY`).
+* Add support for ~ in paths (`ROOT`, `EXTRA_DIRECTORY`).
 
 ### 3.1.2023
-
-Major updates for spring 2023 use in Tufts COMP 15 including: 
-- Introduced concept of collection root and organized records so previously downloaded repositories are not previewed again.
-- Scrolling is done by default.
-- Improved UI that allows for quitting previews for a query.
-- Improved logging.
-- Overall code refactoring.
+* Major updates for spring 2023 use in Tufts COMP 15 including: 
+    * Introduced concept of collection root and organized records so previously downloaded repositories are not previewed again.
+    * Scrolling is done by default.
+    * Improved UI that allows for quitting previews for a query.
+    * Improved logging.
+    * Overall code refactoring.
 
 ### 1.14.2023
-
-Used in Tufts COMP 15 in fall 2022. Planned for use in future semesters. First version moved to course repo.
+* Used in Tufts COMP 15 in fall 2022. Planned for use in future semesters. First version moved to course repo.
