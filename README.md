@@ -82,13 +82,14 @@ collection_root/
 Suppose we have `extra_directory` set to `assignment1_moss`. Then the scraper will create `assignment1_moss/ChamiLamelas_Tufts`.
 Once that is done, the scraper will run `extra_work`. `extra_work` takes three parameters: 
 
-1. The filepath to the downloaded record folder (e.g. `collection_root/ChamiLamelas_Tufts/COMP15/assignment1`).
+1. The filepath to the downloaded record folder (e.g. `collection_root/ChamiLamelas_Tufts`).
 2. The filepath to the created extra directory (e.g. `assignment1_moss/ChamiLamelas_Tufts`).
-3. `extra_work_args` which is a dictionary of additional arguments specified in the configuration file.
+3. The current query that was used in the download of the respective record folder.
+4. `extra_work_args` which is a dictionary of additional arguments specified in the configuration file.
 
 By default `extra_work` does nothing, in which case the user will need to go into `collection_root/ChamiLamelas_Tufts/COMP15/assignment1` and copy the appropriate files into `assignment1_moss/ChamiLamelas_Tufts` in preparation for future `MOSS` jobs. 
 
-However, one can make an `extra_work` Python function that copies some specific files from `collection_root/ChamiLamelas_Tufts/COMP15/assignment1` to `assignment1_moss/ChamiLamelas_Tufts`. For example, one could copy files from directories that contain some target files. For instance, suppose we know `assignment1` has a file `A.cpp`. Our `extra_work` could supply `A.cpp` in `extra_work_args` and then copy over all files from a directory that contains an instance of `A.cpp`. This provides a way of "finding" a student's actual submission for the assignment of interest if they have a very full GitHub repository.
+However, one can make an `extra_work` Python function that copies some specific files from `collection_root/ChamiLamelas_Tufts/COMP15/assignment1` to `assignment1_moss/ChamiLamelas_Tufts`. For example, one could copy over files from any folder that has one file in it containing the provided query. This provides a way of "finding" a student's actual submission for the assignment of interest if they have a very full GitHub repository (e.g. containing all their Tufts coursework).
 
 Note, if `extra_directory` exists and has any contents, none of those contents are modified. By default, no extra directories are created.
 
@@ -113,7 +114,7 @@ If `queries.txt` exists in `collection_root` then each line of the file is inter
 
 Once the setup phase is complete, the user will be prompted with `Query (or @q to quit)? `. Here, the user should enter a query that is unique to the assignment of interest. This query will be passed in to search *code* on GitHub with the specified `language`. 
 
-Once the results for the search are collected, the scraper will begin to "preview" the search results to the user one at a time. After displaying the beginning of the file, the user will need to press `Enter` in order to continue scrolling through the file (somewhat like the `less` Unix command). The preview will highlight lines of the previewed result in green that contain the query. The scraper **will not preview** results that belong to repositories that are listed in `records.txt`. This includes repositories that are discovered in the current scrape, so a user may notice the `x` in the displayed line `[INFO] : Previewing file x/y` go faster than one at a time as repositories (and potentially corresponding future search results) are downloaded.
+Once the results for the search are collected, the scraper will begin to "preview" the search results to the user one at a time. After displaying the beginning of the file, the user will need to press `Enter` in order to continue scrolling through the file (somewhat like the `less` Unix command). The preview will highlight lines of the previewed result in green that contain the query. Note, the "contain" is done in a case insensitive fashion. Hence, the previewed files are previewed where all lines have been lower-cased. The scraper **will not preview** results that belong to repositories that are listed in `records.txt`. This includes repositories that are discovered in the current scrape, so a user may notice the `x` in the displayed line `[INFO] : Previewing file x/y` go faster than one at a time as repositories (and potentially corresponding future search results) are downloaded.
 
 Once a user has determined if the previewed result is a match for an assignment, type `y` and press `Enter`. If the user has determined that the result is not a match, type `n` and press `Enter`. If the user has determined that the result may be a match and wants to see other contents of said repository, type `m` and press `Enter`. If user does not want to see any more previewed results for the most recent query, type `q` and press `Enter`. If the user types anything else, it will be ignored and the preview will keep scrolling.
 
@@ -149,6 +150,10 @@ The scraper also provides a detailed log in a file called `.github_scraper.log` 
 * [Matt Russell](https://www.linkedin.com/in/matthew-russell-152a4414/) -- I took the idea of allowing users to specify their own file filtering, extra work as functions in a Python file based on what Matt does with `canonicalizers.py` in his [CS 15 autograder](https://gitlab.cs.tufts.edu/mrussell/gradescope-autograder). I also used his approach of loading TOML files into Python dataclasses.
 
 ## Changelog
+
+### 4.3.2024
+* Made `query` an attribute of `GithubScraper` so it can be more easily accessed throughout its private methods. 
+* `extra_work` will now be invoked with at least the download path, the extra directory, the query, and the `extra_work_args` as keyword arguments.
 
 ### 3.22.2024
 * Clean up configuration by loading TOML into a dataclass instead of a dictionary and then separately handling defaults.

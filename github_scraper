@@ -10,7 +10,7 @@ is done based on required files in assignments.
 This script should have execute permissions if you wish to run it with ./github_scraper. 
 However, it can just be run with python github_scraper.
 
-Version: 3.22.2024
+Version: 4.3.2024
 
 See https://github.com/DALPy-Developers/Github-Scraping for the most up to date version.
 
@@ -346,13 +346,13 @@ class GithubScraper:
         # Runs query prompting input loop
         done = False
         while not done:
-            query = input(f"Query (or {QUIT_QUERYING} to quit)? ")
-            if query == QUIT_QUERYING:
+            self.query = input(f"Query (or {QUIT_QUERYING} to quit)? ")
+            if self.query == QUIT_QUERYING:
                 done = True
             else:
-                self.__process(query)
+                self.__process()
 
-    def __process(self, query):
+    def __process(self):
         """
         Processes a query - collects query results to preview, previews each one, downloads ones user selects
         and updates the saved records, raising issues and creating extra dirs if appropriate
@@ -360,10 +360,10 @@ class GithubScraper:
 
         # here we maintain that self.queries reflects the contents of the queries file (assuming
         # the file is not edited independent of this program)
-        if query not in self.queries:
-            add_line(self.queries_path, query)
-            self.queries.add(query)
-        records_to_preview = self.__collect_results_to_preview(query)
+        if self.query not in self.queries:
+            add_line(self.queries_path, self.query)
+            self.queries.add(self.query)
+        records_to_preview = self.__collect_results_to_preview()
         for i, record in enumerate(records_to_preview):
 
             # Don't preview any result that user has downloaded in
@@ -384,7 +384,7 @@ class GithubScraper:
                 self.logger.info(
                     f"Previewing file {i + 1}/{len(records_to_preview)}:\n"
                 )
-                preview_result = self.__preview_record(record, query)
+                preview_result = self.__preview_record(record)
                 self.logger.debug(f"Preview result: {preview_result}")
                 if preview_result == PreviewResult.QUIT_QUERY:
                     return
@@ -401,11 +401,11 @@ class GithubScraper:
                 # else it's a maybe response - we do nothing
 
         if len(records_to_preview) == 0:
-            print(f"No records to preview matching {query} -- try a more broad query.")
+            print(f"No records to preview matching {self.query} -- try a more broad query.")
 
     # Helper functions for __process() ...
 
-    def __collect_results_to_preview(self, query):
+    def __collect_results_to_preview(self):
         """Collects query results to be previewed, checking saved records"""
 
         self.logger.info(
@@ -417,7 +417,7 @@ class GithubScraper:
 
         # Go page by page and make api request and collect into
         while not done:
-            json_results = self.__search(query, page)
+            json_results = self.__search(page)
             for result in json_results:
                 record = APIResult(
                     result["repository"]["owner"]["login"],
@@ -435,7 +435,7 @@ class GithubScraper:
             page += 1
         return records
 
-    def __preview_record(self, record, query):
+    def __preview_record(self, record):
         """
         Previews a record, return PreviewResult indicating user decision
 
@@ -453,7 +453,7 @@ class GithubScraper:
         print("\n" + ("=" * int(os.get_terminal_size()[0] / 2)))
         self.logger.info(f"{record.nick()}:")
         for index, line in enumerate(file_content.splitlines()):
-            preview_line(line, query, index)
+            preview_line(line, self.query, index)
 
             # Once we show the first few rows of the file, we start asking user to move forward line
             # by line with enter (like unix less) or respond
@@ -507,7 +507,8 @@ class GithubScraper:
             self.extra_work(
                 record.get_download_path(self.config.collection_root),
                 extra_dir_path,
-                self.config.extra_work_args,
+                self.query,
+                **self.config.extra_work_args
             )
 
     def __add_record(self, record):
@@ -706,7 +707,7 @@ class GithubScraper:
             num_pulls -= 1
         return num_pulls * self.config.api_timeout
 
-    def __search(self, query, page):
+    def __search(self, page):
         """
         Makes a code search request, JSON items result of the request are returned
 
@@ -717,7 +718,7 @@ class GithubScraper:
         if page > 1:
             time.sleep(self.config.api_timeout)
         resp_json = self.__get_json(
-            f"https://api.github.com/search/code?q={make_urlstr(query)}+in:file+language:{make_urlstr(self.config.language)}&page={page}"
+            f"https://api.github.com/search/code?q={make_urlstr(self.query)}+in:file+language:{make_urlstr(self.config.language)}&page={page}"
         )
 
         # 'items' is what we're interested in - so that needs to be there
