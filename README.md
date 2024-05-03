@@ -151,6 +151,9 @@ The scraper also provides a detailed log in a file called `.github_scraper.log` 
 
 ## Changelog
 
+### 5.3.2024
+* Handle the possibility of a user entering an empty query as well as adjusting how a record nickname is logged to be more clear. 
+
 ### 4.3.2024
 * Made `query` an attribute of `GithubScraper` so it can be more easily accessed throughout its private methods. 
 * `extra_work` will now be invoked with at least the download path, the extra directory, the query, and the `extra_work_args` as keyword arguments.
