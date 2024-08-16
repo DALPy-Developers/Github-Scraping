@@ -151,6 +151,9 @@ The scraper also provides a detailed log in a file called `.github_scraper.log` 
 
 ## Changelog
 
+### 8.16.2024 
+* Updated the note that is left in issues raised on found repositories to specifically say not to email the address associated with the issue. At Tufts in CS 15, we use a fake email address (that we don't actually check - just used for the token) so a student will likely never receive a reply (unless someone happens to check the inbox like me). 
+
 ### 5.3.2024
 * Handle the possibility of a user entering an empty query as well as adjusting how a record nickname is logged to be more clear. 
 
