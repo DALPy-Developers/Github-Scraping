@@ -10,7 +10,7 @@ is done based on required files in assignments.
 This script should have execute permissions if you wish to run it with ./github_scraper. 
 However, it can just be run with python github_scraper.
 
-Version: 5.3.2024
+Version: 8.16.2024
 
 See https://github.com/DALPy-Developers/Github-Scraping for the most up to date version.
 
@@ -63,7 +63,7 @@ class GitHubScraperConfig:
         "We noticed you have publicly posted the solution to an assignment in Tufts University course CS15. Please either delete this repository or make it private ASAP. In the past, we've had issues with students plagiarizing code they find on GitHub."
     )
     issue_contact: str = (
-        "If you have additional questions, please send an email to the current course instructor listed on the CS 15 website: https://www.cs.tufts.edu/comp/15/"
+        "If you have additional questions, please send an email to the current course instructor listed on the CS 15 website: https://www.cs.tufts.edu/comp/15/. Do not send an email to the email address associated with this issue."
     )
     language: str = "c++"
     extra_directory: str = None
