@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "github-scraping-moss-integration"
+version = "8.16.2024"
+description = "This repository holds a script that scrapes GitHub for assignment repositories."
+readme = "README.md"
+authors = [{name = "Chami Lamelas"}, {name = "Eitan Joseph"}]
+license = {file = "LICENSE"}
+requires-python = ">=3.9.2"
+
+dependencies = [
+    "toml>=0.10.2",
+    "pytz>=2022.1",
+    "python-magic>=0.4.24"
+]
+
+[project.urls]
+Repository = "https://github.com/DALPy-Developers/Github-Scraping"
+Author = "https://sites.google.com/view/chami-lamelas"
